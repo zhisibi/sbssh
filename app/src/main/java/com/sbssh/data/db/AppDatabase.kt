@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import net.sqlcipher.database.SQLiteDatabase
 import net.sqlcipher.database.SupportFactory
 
 @Database(entities = [VpsEntity::class], version = 1, exportSchema = false)
@@ -16,14 +17,22 @@ abstract class AppDatabase : RoomDatabase() {
 
         fun getInstance(context: Context, passphrase: ByteArray): AppDatabase {
             return INSTANCE ?: synchronized(this) {
-                val factory = SupportFactory(passphrase)
+                SQLiteDatabase.loadLibs(context)
+                val sqlCipherPassphrase = passphrase
+                val factory = SupportFactory(sqlCipherPassphrase)
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
                     "sbssh.db"
                 )
                     .openHelperFactory(factory)
+                    .fallbackToDestructiveMigration()
                     .build()
+
+                // Force open database and create tables early so auth flow catches errors here,
+                // instead of crashing later on first DAO access.
+                instance.openHelper.writableDatabase
+
                 INSTANCE = instance
                 instance
             }

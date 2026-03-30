@@ -47,15 +47,17 @@ class MasterPasswordViewModel(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             try {
+                AppDatabase.close()
                 val salt = cryptoManager.generateSalt()
                 val keyBytes = cryptoManager.deriveKey(password, salt)
-                cryptoManager.setPasswordVerification(password, salt)
                 initDatabase(keyBytes)
+                cryptoManager.setPasswordVerification(password, salt)
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     isAuthenticated = true
                 )
             } catch (e: Exception) {
+                AppDatabase.close()
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     error = e.message ?: "Failed to set password"
@@ -69,6 +71,7 @@ class MasterPasswordViewModel(
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             try {
                 if (cryptoManager.verifyMasterPassword(password)) {
+                    AppDatabase.close()
                     val salt = cryptoManager.getSalt()
                     val keyBytes = cryptoManager.deriveKey(password, salt)
                     initDatabase(keyBytes)
@@ -83,6 +86,7 @@ class MasterPasswordViewModel(
                     )
                 }
             } catch (e: Exception) {
+                AppDatabase.close()
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     error = e.message ?: "Failed to unlock"
