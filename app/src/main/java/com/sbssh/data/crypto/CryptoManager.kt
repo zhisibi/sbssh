@@ -43,6 +43,16 @@ class CryptoManager(private val context: Context) {
         return factory.generateSecret(spec).encoded
     }
 
+    /**
+     * Derive key bytes AND return a SQLCipher-compatible passphrase string.
+     * The passphrase is a hex representation of the derived key, with unsigned byte handling.
+     */
+    fun deriveKeyForDb(password: String, salt: ByteArray): Pair<ByteArray, String> {
+        val keyBytes = deriveKey(password, salt)
+        val hexKey = keyBytes.joinToString("") { "%02x".format(it.toInt() and 0xFF) }
+        return Pair(keyBytes, hexKey)
+    }
+
     fun storeBiometricKey(keyBytes: ByteArray) {
         val keyAlias = "sbssh_biometric_key"
         try {

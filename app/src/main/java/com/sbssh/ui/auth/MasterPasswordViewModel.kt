@@ -49,8 +49,8 @@ class MasterPasswordViewModel(
             try {
                 AppDatabase.close()
                 val salt = cryptoManager.generateSalt()
-                val keyBytes = cryptoManager.deriveKey(password, salt)
-                initDatabase(keyBytes)
+                val (_, hexKey) = cryptoManager.deriveKeyForDb(password, salt)
+                initDatabase(hexKey)
                 cryptoManager.setPasswordVerification(password, salt)
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
@@ -73,8 +73,8 @@ class MasterPasswordViewModel(
                 if (cryptoManager.verifyMasterPassword(password)) {
                     AppDatabase.close()
                     val salt = cryptoManager.getSalt()
-                    val keyBytes = cryptoManager.deriveKey(password, salt)
-                    initDatabase(keyBytes)
+                    val (_, hexKey) = cryptoManager.deriveKeyForDb(password, salt)
+                    initDatabase(hexKey)
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         isAuthenticated = true
@@ -95,16 +95,18 @@ class MasterPasswordViewModel(
         }
     }
 
-    fun unlockWithBiometric(decryptedKey: ByteArray) {
+    fun unlockWithBiometric(decryptedKeyHex: String) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             try {
-                initDatabase(decryptedKey)
+                AppDatabase.close()
+                initDatabase(decryptedKeyHex)
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     isAuthenticated = true
                 )
             } catch (e: Exception) {
+                AppDatabase.close()
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     error = e.message ?: "Biometric unlock failed"
@@ -113,8 +115,8 @@ class MasterPasswordViewModel(
         }
     }
 
-    private fun initDatabase(keyBytes: ByteArray) {
-        AppDatabase.getInstance(SbsshApp.instance, keyBytes)
+    private fun initDatabase(passphraseHex: String) {
+        AppDatabase.getInstance(SbsshApp.instance, passphraseHex)
     }
 
     fun enableBiometric(password: String) {
