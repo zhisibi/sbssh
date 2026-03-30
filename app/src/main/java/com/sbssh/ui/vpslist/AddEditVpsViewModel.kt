@@ -30,14 +30,16 @@ data class AddEditVpsUiState(
 
 class AddEditVpsViewModel(private val vpsId: Long? = null) : ViewModel() {
 
-    private val dao = AppDatabase.getInstance().vpsDao()
+    private var dao = runCatching { AppDatabase.getInstance().vpsDao() }.getOrNull()
     private val _uiState = MutableStateFlow(AddEditVpsUiState())
     val uiState: StateFlow<AddEditVpsUiState> = _uiState.asStateFlow()
 
     init {
-        if (vpsId != null) {
+        if (dao == null) {
+            _uiState.value = _uiState.value.copy(error = "Database not initialized")
+        } else if (vpsId != null) {
             viewModelScope.launch {
-                val vps = dao.getVpsById(vpsId)
+                val vps = dao!!.getVpsById(vpsId)
                 if (vps != null) {
                     _uiState.value = AddEditVpsUiState(
                         alias = vps.alias,
@@ -92,7 +94,7 @@ class AddEditVpsViewModel(private val vpsId: Long? = null) : ViewModel() {
             try {
                 val now = System.currentTimeMillis()
                 if (vpsId == null) {
-                    dao.insertVps(
+                    dao?.insertVps(
                         VpsEntity(
                             alias = state.alias.trim(),
                             host = state.host.trim(),
@@ -107,8 +109,8 @@ class AddEditVpsViewModel(private val vpsId: Long? = null) : ViewModel() {
                         )
                     )
                 } else {
-                    val existing = dao.getVpsById(vpsId) ?: return@launch
-                    dao.updateVps(
+                    val existing = dao?.getVpsById(vpsId) ?: return@launch
+                    dao?.updateVps(
                         existing.copy(
                             alias = state.alias.trim(),
                             host = state.host.trim(),

@@ -29,7 +29,7 @@ data class TerminalUiState(
 
 class TerminalViewModel(private val vpsId: Long) : ViewModel() {
 
-    private val dao = AppDatabase.getInstance().vpsDao()
+    private var dao = runCatching { AppDatabase.getInstance().vpsDao() }.getOrNull()
     private val sessions = mutableMapOf<Int, SshSessionManager>()
     private var tabCounter = 0
 
@@ -39,9 +39,16 @@ class TerminalViewModel(private val vpsId: Long) : ViewModel() {
     private var vps: VpsEntity? = null
 
     init {
-        viewModelScope.launch {
-            vps = dao.getVpsById(vpsId)
-            vps?.let { addTab(it) }
+        if (dao == null) {
+            _uiState.value = _uiState.value.copy(
+                tabs = listOf(TerminalTab(id = 0, vpsAlias = "Error", error = "Database not initialized")),
+                activeTabId = 0
+            )
+        } else {
+            viewModelScope.launch {
+                vps = dao!!.getVpsById(vpsId)
+                vps?.let { addTab(it) }
+            }
         }
     }
 

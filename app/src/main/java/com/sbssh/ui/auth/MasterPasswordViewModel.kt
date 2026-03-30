@@ -49,8 +49,8 @@ class MasterPasswordViewModel(
             try {
                 AppDatabase.close()
                 val salt = cryptoManager.generateSalt()
-                val (_, hexKey) = cryptoManager.deriveKeyForDb(password, salt)
-                initDatabase(hexKey)
+                val keyBytes = cryptoManager.deriveKey(password, salt)
+                initDatabase(keyBytes)
                 cryptoManager.setPasswordVerification(password, salt)
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
@@ -73,8 +73,8 @@ class MasterPasswordViewModel(
                 if (cryptoManager.verifyMasterPassword(password)) {
                     AppDatabase.close()
                     val salt = cryptoManager.getSalt()
-                    val (_, hexKey) = cryptoManager.deriveKeyForDb(password, salt)
-                    initDatabase(hexKey)
+                    val keyBytes = cryptoManager.deriveKey(password, salt)
+                    initDatabase(keyBytes)
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         isAuthenticated = true
@@ -95,12 +95,12 @@ class MasterPasswordViewModel(
         }
     }
 
-    fun unlockWithBiometric(decryptedKeyHex: String) {
+    fun unlockWithBiometric(decryptedKey: ByteArray) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             try {
                 AppDatabase.close()
-                initDatabase(decryptedKeyHex)
+                initDatabase(decryptedKey)
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     isAuthenticated = true
@@ -115,8 +115,8 @@ class MasterPasswordViewModel(
         }
     }
 
-    private fun initDatabase(passphraseHex: String) {
-        AppDatabase.getInstance(SbsshApp.instance, passphraseHex)
+    private fun initDatabase(passphrase: ByteArray) {
+        AppDatabase.getInstance(SbsshApp.instance, passphrase)
     }
 
     fun enableBiometric(password: String) {

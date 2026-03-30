@@ -17,15 +17,22 @@ data class VpsListUiState(
 
 class VpsListViewModel : ViewModel() {
 
-    private val dao = AppDatabase.getInstance().vpsDao()
+    private var dao = runCatching { AppDatabase.getInstance().vpsDao() }.getOrNull()
 
     private val _uiState = MutableStateFlow(VpsListUiState())
     val uiState: StateFlow<VpsListUiState> = _uiState.asStateFlow()
 
     init {
-        viewModelScope.launch {
-            dao.getAllVps().collect { list ->
-                _uiState.value = _uiState.value.copy(vpsList = list, isLoading = false)
+        if (dao == null) {
+            _uiState.value = _uiState.value.copy(
+                isLoading = false,
+                error = "Database not initialized"
+            )
+        } else {
+            viewModelScope.launch {
+                dao!!.getAllVps().collect { list ->
+                    _uiState.value = _uiState.value.copy(vpsList = list, isLoading = false)
+                }
             }
         }
     }
@@ -40,7 +47,7 @@ class VpsListViewModel : ViewModel() {
 
     fun deleteVps(id: Long) {
         viewModelScope.launch {
-            dao.deleteVpsById(id)
+            dao?.deleteVpsById(id)
             _uiState.value = _uiState.value.copy(showDeleteDialog = null)
         }
     }

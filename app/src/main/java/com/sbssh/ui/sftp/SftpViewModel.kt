@@ -32,7 +32,7 @@ data class SftpUiState(
 
 class SftpViewModel(private val vpsId: Long, private val context: Context) : ViewModel() {
 
-    private val dao = AppDatabase.getInstance().vpsDao()
+    private var dao = runCatching { AppDatabase.getInstance().vpsDao() }.getOrNull()
     private val manager = SftpManager()
 
     private val _uiState = MutableStateFlow(SftpUiState())
@@ -41,19 +41,26 @@ class SftpViewModel(private val vpsId: Long, private val context: Context) : Vie
     private var vps: VpsEntity? = null
 
     init {
-        viewModelScope.launch {
-            vps = dao.getVpsById(vpsId)
-            vps?.let { v ->
-                val success = manager.connect(v)
-                if (success) {
-                    val pwd = manager.getCurrentPath()
-                    _uiState.value = _uiState.value.copy(isConnected = true, isConnecting = false, currentPath = pwd)
-                    loadDirectory(pwd)
-                } else {
-                    _uiState.value = _uiState.value.copy(
-                        isConnecting = false,
-                        connectionError = "Failed to connect to ${v.host}"
-                    )
+        if (dao == null) {
+            _uiState.value = _uiState.value.copy(
+                isConnecting = false,
+                connectionError = "Database not initialized"
+            )
+        } else {
+            viewModelScope.launch {
+                vps = dao!!.getVpsById(vpsId)
+                vps?.let { v ->
+                    val success = manager.connect(v)
+                    if (success) {
+                        val pwd = manager.getCurrentPath()
+                        _uiState.value = _uiState.value.copy(isConnected = true, isConnecting = false, currentPath = pwd)
+                        loadDirectory(pwd)
+                    } else {
+                        _uiState.value = _uiState.value.copy(
+                            isConnecting = false,
+                            connectionError = "Failed to connect to ${v.host}"
+                        )
+                    }
                 }
             }
         }

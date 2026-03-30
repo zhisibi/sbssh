@@ -166,11 +166,10 @@ fun MasterPasswordScreen(
                             cryptoObject = cryptoObject,
                             onSuccess = { co ->
                                 try {
-                                    val decryptedBytes = cryptoManager.decryptKeyWithBiometric(
+                                    val decrypted = cryptoManager.decryptKeyWithBiometric(
                                         co?.cipher ?: return@showBiometricPromptWithCrypto
                                     )
-                                    val hexKey = decryptedBytes.joinToString("") { "%02x".format(it.toInt() and 0xFF) }
-                                    viewModel.unlockWithBiometric(hexKey)
+                                    viewModel.unlockWithBiometric(decrypted)
                                 } catch (e: Exception) {
                                     Toast.makeText(context, "Biometric error: ${e.message}", Toast.LENGTH_SHORT).show()
                                 }
