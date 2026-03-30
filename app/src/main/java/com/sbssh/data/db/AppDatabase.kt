@@ -18,7 +18,8 @@ abstract class AppDatabase : RoomDatabase() {
         fun getInstance(context: Context, passphrase: ByteArray): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 SQLiteDatabase.loadLibs(context)
-                val sqlCipherPassphrase = passphrase
+                val hexPassphrase = passphrase.joinToString("") { "%02x".format(it) }
+                val sqlCipherPassphrase = SQLiteDatabase.getBytes(hexPassphrase.toCharArray())
                 val factory = SupportFactory(sqlCipherPassphrase)
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
