@@ -47,17 +47,31 @@ class MasterPasswordViewModel(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             try {
-                AppDatabase.close()
+                // Generate salt (do NOT store yet — wait until db init succeeds)
                 val salt = cryptoManager.generateSalt()
                 val keyBytes = cryptoManager.deriveKey(password, salt)
-                initDatabase(keyBytes)
+
+                // Try to init database first
+                try {
+                    AppDatabase.close()
+                    initDatabase(keyBytes)
+                } catch (e: Exception) {
+                    // DB init failed — clear any partial state and report error
+                    cryptoManager.clearMasterPasswordState()
+                    throw e
+                }
+
+                // DB init succeeded — NOW persist salt + password verification hash
+                cryptoManager.saveSalt(salt)
                 cryptoManager.setPasswordVerification(password, salt)
+
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     isAuthenticated = true
                 )
             } catch (e: Exception) {
                 AppDatabase.close()
+                cryptoManager.clearMasterPasswordState()
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     error = e.message ?: "Failed to set password"
@@ -70,6 +84,18 @@ class MasterPasswordViewModel(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             try {
+                // Check for corrupted state: salt exists but no password hash
+                // (happens when previous Create failed before storing hash)
+                if (!cryptoManager.isMasterPasswordSet()) {
+                    cryptoManager.clearMasterPasswordState()
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        isFirstLaunch = true,
+                        error = "Previous setup was incomplete. Please set a new master password."
+                    )
+                    return@launch
+                }
+
                 if (cryptoManager.verifyMasterPassword(password)) {
                     AppDatabase.close()
                     val salt = cryptoManager.getSalt()

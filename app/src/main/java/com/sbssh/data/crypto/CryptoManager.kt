@@ -27,8 +27,20 @@ class CryptoManager(private val context: Context) {
     fun generateSalt(): ByteArray {
         val salt = ByteArray(32)
         SecureRandom().nextBytes(salt)
-        prefs.edit().putString("salt", Base64.encodeToString(salt, Base64.NO_WRAP)).apply()
         return salt
+    }
+
+    fun saveSalt(salt: ByteArray) {
+        prefs.edit().putString("salt", Base64.encodeToString(salt, Base64.NO_WRAP)).apply()
+    }
+
+    fun clearMasterPasswordState() {
+        prefs.edit()
+            .remove("salt")
+            .remove("password_hash")
+            .remove("bio_encrypted_key")
+            .remove("bio_key_iv")
+            .apply()
     }
 
     fun getSalt(): ByteArray {
@@ -131,7 +143,7 @@ class CryptoManager(private val context: Context) {
     }
 
     fun isMasterPasswordSet(): Boolean {
-        return !isFirstLaunch()
+        return prefs.contains("salt") && prefs.contains("password_hash")
     }
 
     fun setPasswordVerification(password: String, salt: ByteArray) {
