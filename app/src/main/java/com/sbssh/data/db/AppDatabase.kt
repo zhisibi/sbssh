@@ -6,6 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import net.sqlcipher.database.SQLiteDatabase
 import net.sqlcipher.database.SupportFactory
+import java.io.File
 
 @Database(entities = [VpsEntity::class], version = 1, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
@@ -17,6 +18,15 @@ abstract class AppDatabase : RoomDatabase() {
 
         fun getInstance(context: Context, passphrase: ByteArray): AppDatabase {
             return INSTANCE ?: synchronized(this) {
+                // Delete any existing corrupted db file from previous failed attempts
+                val dbFile = context.getDatabasePath("sbssh.db")
+                if (dbFile.exists()) {
+                    dbFile.delete()
+                    // Also delete -wal and -shm journal files
+                    File(dbFile.path + "-wal").delete()
+                    File(dbFile.path + "-shm").delete()
+                }
+
                 SQLiteDatabase.loadLibs(context)
                 val factory = SupportFactory(passphrase)
                 val instance = Room.databaseBuilder(
