@@ -13,6 +13,7 @@ import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.PBEKeySpec
 import android.util.Base64
+import com.sbssh.util.AppLogger
 
 class CryptoManager(private val context: Context) {
 
@@ -147,10 +148,10 @@ class CryptoManager(private val context: Context) {
     }
 
     fun setPasswordVerification(password: String, salt: ByteArray) {
-        // Store a verification hash (password + "verify" derived separately)
         val verifySpec = PBEKeySpec((password + "verify").toCharArray(), salt, 100_000, 256)
         val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
         val hash = Base64.encodeToString(factory.generateSecret(verifySpec).encoded, Base64.NO_WRAP)
+        AppLogger.log("CRYPTO", "setPasswordVerification: pwdLen=${password.length}, saltLen=${salt.size}, hashLen=${hash.length}")
         prefs.edit().putString("password_hash", hash).apply()
     }
 
@@ -159,8 +160,9 @@ class CryptoManager(private val context: Context) {
         val verifySpec = PBEKeySpec((password + "verify").toCharArray(), salt, 100_000, 256)
         val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
         val hash = Base64.encodeToString(factory.generateSecret(verifySpec).encoded, Base64.NO_WRAP)
-        val storedHash = prefs.getString("password_hash", null) ?: return false
-        return hash == storedHash
+        val storedHash = prefs.getString("password_hash", null)
+        AppLogger.log("CRYPTO", "verifyMasterPassword: pwdLen=${password.length}, saltLen=${salt.size}, hashLen=${hash.length}, storedHashLen=${storedHash?.length}, match=${hash == storedHash}")
+        return storedHash != null && hash == storedHash
     }
 
     /**

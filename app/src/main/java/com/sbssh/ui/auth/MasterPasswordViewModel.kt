@@ -7,6 +7,7 @@ import com.sbssh.SbsshApp
 import com.sbssh.data.crypto.CryptoManager
 import com.sbssh.data.crypto.SessionKeyHolder
 import com.sbssh.data.db.AppDatabase
+import com.sbssh.util.AppLogger
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -48,8 +49,10 @@ class MasterPasswordViewModel(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             try {
+                AppLogger.log("AUTH", "setPassword: starting, pwdLen=${password.length}")
                 val salt = cryptoManager.generateSalt()
                 val keyBytes = cryptoManager.deriveKey(password, salt)
+                AppLogger.log("AUTH", "setPassword: salt generated len=${salt.size}, key derived len=${keyBytes.size}")
 
                 // Store session key for field-level encryption
                 SessionKeyHolder.set(keyBytes)
@@ -57,16 +60,20 @@ class MasterPasswordViewModel(
                 // Init plain Room database
                 AppDatabase.close()
                 AppDatabase.getInstance(SbsshApp.instance)
+                AppLogger.log("AUTH", "setPassword: database initialized")
 
                 // Now persist salt + password verification hash
                 cryptoManager.saveSalt(salt)
                 cryptoManager.setPasswordVerification(password, salt)
+                AppLogger.log("AUTH", "setPassword: salt and hash saved to prefs")
 
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     isAuthenticated = true
                 )
+                AppLogger.log("AUTH", "setPassword: SUCCESS")
             } catch (e: Exception) {
+                AppLogger.log("AUTH", "setPassword: FAILED", e)
                 SessionKeyHolder.clear()
                 cryptoManager.clearMasterPasswordState()
                 _uiState.value = _uiState.value.copy(
