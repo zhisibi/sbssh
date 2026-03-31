@@ -3,10 +3,10 @@ package com.sbssh.ui.settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -17,6 +17,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -31,6 +34,12 @@ fun SettingsScreen(
         factory = SettingsViewModel.Factory(context)
     )
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    val backupLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/octet-stream")
+    ) { uri ->
+        uri?.let { viewModel.saveBackupToUri(it) }
+    }
 
     val restoreLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -74,33 +83,20 @@ fun SettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Biometric toggle
+            // 1. Biometric
             SettingsCard(
                 icon = Icons.Default.Fingerprint,
                 title = "Biometric Login",
                 subtitle = if (uiState.biometricEnabled) "Enabled" else "Disabled",
-                onClick = {
-                    if (uiState.biometricEnabled) {
-                        viewModel.toggleBiometric()
-                    } else {
-                        // Show dialog to enter password
-                        viewModel.toggleBiometric()
-                    }
-                }
+                onClick = { viewModel.showBiometricPasswordDialog() }
             ) {
                 Switch(
                     checked = uiState.biometricEnabled,
-                    onCheckedChange = {
-                        if (it) {
-                            viewModel.toggleBiometric()
-                        } else {
-                            viewModel.toggleBiometric()
-                        }
-                    }
+                    onCheckedChange = { viewModel.showBiometricPasswordDialog() }
                 )
             }
 
-            // Language switch
+            // 2. Language
             SettingsCard(
                 icon = Icons.Default.Language,
                 title = if (uiState.language == "zh") "语言" else "Language",
@@ -108,7 +104,7 @@ fun SettingsScreen(
                 onClick = { viewModel.showLanguageDialog() }
             )
 
-            // Font size
+            // 3. Font size
             SettingsCard(
                 icon = Icons.Default.FormatSize,
                 title = if (uiState.language == "zh") "字体大小" else "Font Size",
@@ -121,23 +117,48 @@ fun SettingsScreen(
                 onClick = { viewModel.showFontSizeDialog() }
             )
 
-            // Server backup
+            // 4. Backup
             SettingsCard(
                 icon = Icons.Default.Backup,
                 title = if (uiState.language == "zh") "服务器备份" else "Server Backup",
-                subtitle = if (uiState.language == "zh") "导出到 JSON 文件" else "Export to JSON file",
-                onClick = { viewModel.backupServers() }
+                subtitle = if (uiState.language == "zh") "导出加密备份文件" else "Export encrypted backup",
+                onClick = {
+                    val fileName = viewModel.prepareBackup()
+                    if (fileName != null) {
+                        backupLauncher.launch(fileName)
+                    }
+                }
             )
 
-            // Server restore
+            // 5. Restore
             SettingsCard(
                 icon = Icons.Default.Restore,
                 title = if (uiState.language == "zh") "服务器恢复" else "Server Restore",
-                subtitle = if (uiState.language == "zh") "从 JSON 文件导入" else "Import from JSON file",
-                onClick = { restoreLauncher.launch(arrayOf("application/json")) }
+                subtitle = if (uiState.language == "zh") "从备份文件恢复" else "Restore from backup",
+                onClick = { restoreLauncher.launch(arrayOf("*/*")) }
             )
 
-            // About
+            // 6. Change Password
+            SettingsCard(
+                icon = Icons.Default.Lock,
+                title = if (uiState.language == "zh") "修改密码" else "Change Password",
+                subtitle = if (uiState.language == "zh") "修改主密码并重新加密数据" else "Change master password & re-encrypt",
+                onClick = { viewModel.showChangePasswordDialog() }
+            )
+
+            // 7. Cloud Sync (placeholder)
+            SettingsCard(
+                icon = Icons.Default.CloudSync,
+                title = if (uiState.language == "zh") "云同步" else "Cloud Sync",
+                subtitle = if (uiState.cloudSyncEnabled) {
+                    if (uiState.language == "zh") "已启用" else "Enabled"
+                } else {
+                    if (uiState.language == "zh") "未启用（即将支持）" else "Not enabled (coming soon)"
+                },
+                onClick = { viewModel.showCloudSyncDialog() }
+            )
+
+            // 8. About
             SettingsCard(
                 icon = Icons.Default.Info,
                 title = if (uiState.language == "zh") "关于" else "About",
@@ -145,6 +166,52 @@ fun SettingsScreen(
                 onClick = { viewModel.showAbout() }
             )
         }
+    }
+
+    // ========== Dialogs ==========
+
+    // Biometric password dialog
+    if (uiState.showBiometricPasswordDialog) {
+        var pwd by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissBiometricPasswordDialog() },
+            title = {
+                Text(
+                    if (uiState.biometricEnabled) "Disable Biometric"
+                    else "Enable Biometric"
+                )
+            },
+            text = {
+                Column {
+                    if (!uiState.biometricEnabled) {
+                        Text(
+                            "Enter your master password to enable fingerprint login",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
+                    OutlinedTextField(
+                        value = pwd,
+                        onValueChange = { pwd = it },
+                        label = { Text("Master Password") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { viewModel.toggleBiometric(pwd) },
+                    enabled = pwd.isNotEmpty()
+                ) {
+                    Text(if (uiState.biometricEnabled) "Disable" else "Enable")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissBiometricPasswordDialog() }) { Text("Cancel") }
+            }
+        )
     }
 
     // Language dialog
@@ -167,9 +234,7 @@ fun SettingsScreen(
                 }
             },
             confirmButton = {},
-            dismissButton = {
-                TextButton(onClick = { viewModel.dismissLanguageDialog() }) { Text("Cancel") }
-            }
+            dismissButton = { TextButton(onClick = { viewModel.dismissLanguageDialog() }) { Text("Cancel") } }
         )
     }
 
@@ -181,7 +246,7 @@ fun SettingsScreen(
             text = {
                 Column {
                     val sizes = listOf("small" to "Small", "medium" to "Medium", "large" to "Large")
-                    for ((key, label) in sizes) {
+                    for ((key, _) in sizes) {
                         ListItem(
                             headlineContent = {
                                 Text(
@@ -189,7 +254,7 @@ fun SettingsScreen(
                                         "small" -> if (uiState.language == "zh") "小" else "Small"
                                         "medium" -> if (uiState.language == "zh") "中" else "Medium"
                                         "large" -> if (uiState.language == "zh") "大" else "Large"
-                                        else -> label
+                                        else -> key
                                     }
                                 )
                             },
@@ -200,9 +265,117 @@ fun SettingsScreen(
                 }
             },
             confirmButton = {},
-            dismissButton = {
-                TextButton(onClick = { viewModel.dismissFontSizeDialog() }) { Text("Cancel") }
-            }
+            dismissButton = { TextButton(onClick = { viewModel.dismissFontSizeDialog() }) { Text("Cancel") } }
+        )
+    }
+
+    // Cloud sync dialog
+    if (uiState.showCloudSyncDialog) {
+        var enabled by remember { mutableStateOf(uiState.cloudSyncEnabled) }
+        var url by remember { mutableStateOf(uiState.cloudSyncUrl) }
+        var username by remember { mutableStateOf(uiState.cloudSyncUsername) }
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissCloudSyncDialog() },
+            title = { Text(if (uiState.language == "zh") "云同步设置" else "Cloud Sync") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(if (uiState.language == "zh") "启用云同步" else "Enable Cloud Sync")
+                        Switch(checked = enabled, onCheckedChange = { enabled = it })
+                    }
+                    if (enabled) {
+                        OutlinedTextField(
+                            value = url,
+                            onValueChange = { url = it },
+                            label = { Text("Server URL") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = username,
+                            onValueChange = { username = it },
+                            label = { Text("Username") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Text(
+                            if (uiState.language == "zh") "⚠️ 云同步功能即将上线" else "⚠️ Cloud sync coming soon",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.saveCloudSync(enabled, url, username) }) {
+                    Text("Save")
+                }
+            },
+            dismissButton = { TextButton(onClick = { viewModel.dismissCloudSyncDialog() }) { Text("Cancel") } }
+        )
+    }
+
+    // Change password dialog
+    if (uiState.showChangePasswordDialog) {
+        var oldPwd by remember { mutableStateOf("") }
+        var newPwd by remember { mutableStateOf("") }
+        var confirmPwd by remember { mutableStateOf("") }
+        var showOld by remember { mutableStateOf(false) }
+        var showNew by remember { mutableStateOf(false) }
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissChangePasswordDialog() },
+            title = { Text(if (uiState.language == "zh") "修改密码" else "Change Password") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = oldPwd,
+                        onValueChange = { oldPwd = it },
+                        label = { Text(if (uiState.language == "zh") "旧密码" else "Old Password") },
+                        singleLine = true,
+                        visualTransformation = if (showOld) VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            IconButton(onClick = { showOld = !showOld }) {
+                                Icon(if (showOld) Icons.Default.VisibilityOff else Icons.Default.Visibility, contentDescription = null)
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = newPwd,
+                        onValueChange = { newPwd = it },
+                        label = { Text(if (uiState.language == "zh") "新密码" else "New Password") },
+                        singleLine = true,
+                        visualTransformation = if (showNew) VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            IconButton(onClick = { showNew = !showNew }) {
+                                Icon(if (showNew) Icons.Default.VisibilityOff else Icons.Default.Visibility, contentDescription = null)
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = confirmPwd,
+                        onValueChange = { confirmPwd = it },
+                        label = { Text(if (uiState.language == "zh") "确认新密码" else "Confirm Password") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { viewModel.changePassword(oldPwd, newPwd, confirmPwd) },
+                    enabled = oldPwd.isNotEmpty() && newPwd.isNotEmpty() && confirmPwd.isNotEmpty()
+                ) {
+                    Text(if (uiState.language == "zh") "确认修改" else "Change")
+                }
+            },
+            dismissButton = { TextButton(onClick = { viewModel.dismissChangePasswordDialog() }) { Text("Cancel") } }
         )
     }
 
@@ -227,9 +400,7 @@ fun SettingsScreen(
                     Text("© 2026 sbssh", style = MaterialTheme.typography.labelSmall)
                 }
             },
-            confirmButton = {
-                TextButton(onClick = { viewModel.dismissAbout() }) { Text("OK") }
-            }
+            confirmButton = { TextButton(onClick = { viewModel.dismissAbout() }) { Text("OK") } }
         )
     }
 }
@@ -246,14 +417,10 @@ private fun SettingsCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Row(
-            modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth(),
+            modifier = Modifier.padding(16.dp).fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -261,34 +428,17 @@ private fun SettingsCard(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.weight(1f)
             ) {
-                Icon(
-                    icon,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(24.dp)
-                )
+                Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
                 Spacer(modifier = Modifier.width(16.dp))
                 Column {
-                    Text(
-                        title,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        subtitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             if (trailing != null) {
                 trailing()
             } else {
-                Icon(
-                    Icons.Default.ChevronRight,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }

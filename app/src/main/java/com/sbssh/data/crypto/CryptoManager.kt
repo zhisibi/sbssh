@@ -162,4 +162,32 @@ class CryptoManager(private val context: Context) {
         val storedHash = prefs.getString("password_hash", null) ?: return false
         return hash == storedHash
     }
+
+    /**
+     * Change master password.
+     * Returns the new session key bytes for the caller to update SessionKeyHolder and re-encrypt data.
+     */
+    fun changeMasterPassword(oldPassword: String, newPassword: String): ByteArray {
+        if (!verifyMasterPassword(oldPassword)) {
+            throw IllegalArgumentException("Old password is incorrect")
+        }
+        if (newPassword.length < 6) {
+            throw IllegalArgumentException("New password must be at least 6 characters")
+        }
+
+        // Generate new salt
+        val newSalt = generateSalt()
+        val newKeyBytes = deriveKey(newPassword, newSalt)
+
+        // Store new salt and verification hash
+        saveSalt(newSalt)
+        setPasswordVerification(newPassword, newSalt)
+
+        // Update biometric if enabled
+        if (isBiometricEnabled()) {
+            enableBiometric(newKeyBytes)
+        }
+
+        return newKeyBytes
+    }
 }
