@@ -12,8 +12,8 @@ android {
         applicationId = "com.sbssh"
         minSdk = 26
         targetSdk = 34
-        versionCode = 10
-        versionName = "debug-9"
+        versionCode = 11
+        versionName = "debug-10"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

@@ -184,6 +184,7 @@ fun TerminalScreen(
                     .weight(1f)
                     .fillMaxWidth()
                     .background(TerminalBg)
+                    .windowInsetsPadding(WindowInsets.ime)
                     .pointerInput(Unit) {
                         detectTapGestures(onTap = {
                             focusRequester.requestFocus()
@@ -236,7 +237,7 @@ fun TerminalScreen(
                             }
                         } else if (new.length < old.length) {
                             val count = old.length - new.length
-                            if (count > 0) viewModel.sendRaw("\u007F".repeat(count))
+                            if (count > 0) viewModel.sendRaw("\b".repeat(count))
                         }
                         inputBuffer = new
                         if (inputBuffer.length > 32) inputBuffer = ""
