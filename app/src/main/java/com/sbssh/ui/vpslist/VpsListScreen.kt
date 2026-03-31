@@ -28,27 +28,13 @@ fun VpsListScreen(
 ) {
     val viewModel: VpsListViewModel = viewModel(factory = VpsListViewModel.Factory())
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    var showSettingsMenu by remember { mutableStateOf(false) }
-
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.my_servers)) },
                 actions = {
-                    Box {
-                        IconButton(onClick = { showSettingsMenu = true }) {
-                            Icon(Icons.Default.Settings, contentDescription = "Settings")
-                        }
-                        DropdownMenu(
-                            expanded = showSettingsMenu,
-                            onDismissRequest = { showSettingsMenu = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.settings)) },
-                                onClick = { showSettingsMenu = false; onSettings() },
-                                leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) }
-                            )
-                        }
+                    IconButton(onClick = onSettings) {
+                        Icon(Icons.Default.Settings, contentDescription = "Settings")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
