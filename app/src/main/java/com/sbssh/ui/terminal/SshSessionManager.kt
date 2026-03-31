@@ -107,15 +107,17 @@ class SshSessionManager {
     }
 
     fun sendCommand(command: String) {
-        try {
-            if (outputStream == null) {
-                AppLogger.log("SSH", "sendCommand: outputStream is null")
-                return
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                if (outputStream == null || channel?.isConnected != true) {
+                    AppLogger.log("SSH", "sendCommand: channel not connected")
+                    return@launch
+                }
+                outputStream?.write(command.toByteArray())
+                outputStream?.flush()
+            } catch (e: Exception) {
+                AppLogger.log("SSH", "sendCommand failed", e)
             }
-            outputStream?.write(command.toByteArray())
-            outputStream?.flush()
-        } catch (e: Exception) {
-            AppLogger.log("SSH", "sendCommand failed", e)
         }
     }
 

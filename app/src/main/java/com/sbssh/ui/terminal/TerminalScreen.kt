@@ -124,9 +124,13 @@ fun TerminalScreen(
                                     ctrlMode = false
                                 }
                             },
-                            label = { Text(if (label == "CTRL" && ctrlMode) "CTRL*" else label, style = MaterialTheme.typography.labelSmall) },
+                            label = { Text(if (label == "CTRL" && ctrlMode) "CTRL*" else label, style = MaterialTheme.typography.labelSmall, color = Color.White) },
                             enabled = activeTab?.isConnected == true,
-                            modifier = Modifier.height(32.dp)
+                            modifier = Modifier.height(32.dp),
+                            colors = AssistChipDefaults.assistChipColors(
+                                labelColor = Color.White,
+                                containerColor = TerminalBg
+                            )
                         )
                     }
                 }
