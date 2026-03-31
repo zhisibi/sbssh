@@ -155,8 +155,6 @@ fun SftpScreen(
                 uiState.isConnecting -> {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator()
-                            Spacer(modifier = Modifier.height(16.dp))
                             Text("Connecting...")
                         }
                     }
@@ -172,7 +170,7 @@ fun SftpScreen(
                 }
                 uiState.isLoading -> {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
+                        Text("Loading files...")
                     }
                 }
                 uiState.files.isEmpty() -> {

@@ -125,9 +125,12 @@ fun TerminalScreen(
                         )
                     }
                     activeTab.isConnecting -> {
-                        CircularProgressIndicator(
-                            modifier = Modifier.align(Alignment.Center),
-                            color = TerminalGreen
+                        Text(
+                            "Connecting...",
+                            color = TerminalGreen,
+                            modifier = Modifier
+                                .align(Alignment.Center)
+                                .padding(16.dp)
                         )
                     }
                     else -> {

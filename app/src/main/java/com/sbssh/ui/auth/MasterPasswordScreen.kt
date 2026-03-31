@@ -20,6 +20,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sbssh.data.crypto.CryptoManager
+import com.sbssh.ui.SimpleLoadingText
 import com.sbssh.util.BiometricHelper
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -146,10 +147,7 @@ fun MasterPasswordScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 if (uiState.isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        color = MaterialTheme.colorScheme.onPrimary
-                    )
+                    Text(if (uiState.isFirstLaunch) "Creating..." else "Unlocking...")
                 } else {
                     Text(if (uiState.isFirstLaunch) "Create" else "Unlock")
                 }
