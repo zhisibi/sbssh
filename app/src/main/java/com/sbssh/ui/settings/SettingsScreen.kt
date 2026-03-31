@@ -30,8 +30,9 @@ fun SettingsScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
+    val activity = context as? androidx.appcompat.app.AppCompatActivity
     val viewModel: SettingsViewModel = viewModel(
-        factory = SettingsViewModel.Factory(context)
+        factory = SettingsViewModel.Factory(context, activity)
     )
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -45,6 +46,22 @@ fun SettingsScreen(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
         uri?.let { viewModel.restoreServers(it) }
+    }
+
+    // Watch for backup data readiness, then launch file chooser
+    LaunchedEffect(uiState.pendingBackupFileName) {
+        val fileName = uiState.pendingBackupFileName
+        if (fileName != null) {
+            backupLauncher.launch(fileName)
+        }
+    }
+
+    // Watch for language change -> restart activity
+    LaunchedEffect(uiState.shouldRestart) {
+        if (uiState.shouldRestart) {
+            viewModel.onRestartConsumed()
+            activity?.recreate()
+        }
     }
 
     LaunchedEffect(uiState.error) {
@@ -122,12 +139,7 @@ fun SettingsScreen(
                 icon = Icons.Default.Backup,
                 title = if (uiState.language == "zh") "服务器备份" else "Server Backup",
                 subtitle = if (uiState.language == "zh") "导出加密备份文件" else "Export encrypted backup",
-                onClick = {
-                    val fileName = viewModel.prepareBackup()
-                    if (fileName != null) {
-                        backupLauncher.launch(fileName)
-                    }
-                }
+                onClick = { viewModel.prepareBackup() }
             )
 
             // 5. Restore
