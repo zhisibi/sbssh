@@ -138,48 +138,72 @@ class SettingsViewModel(
 
     // ========== Backup — prepare data and write to URI in one step ==========
     fun saveBackupToUri(uri: Uri) {
-        AppLogger.log("BACKUP", "saveBackupToUri called, uri=$uri")
+        AppLogger.log("BACKUP", "saveBackupToUri: uri=$uri")
         if (dao == null) {
-            AppLogger.log("BACKUP", "DAO is null!")
+            AppLogger.log("BACKUP", "DAO is null")
             _uiState.value = _uiState.value.copy(error = "Database not initialized")
             return
         }
         viewModelScope.launch {
             try {
-                AppLogger.log("BACKUP", "Reading VPS list...")
-                val vpsList = dao!!.getAllVpsAsList()
+                // Step 1: Read VPS data
+                val vpsList = try { dao!!.getAllVpsAsList() } catch (e: Exception) {
+                    AppLogger.log("BACKUP", "getAllVpsAsList failed", e); throw e }
                 AppLogger.log("BACKUP", "VPS count: ${vpsList.size}")
                 if (vpsList.isEmpty()) {
-                    AppLogger.log("BACKUP", "No servers to backup")
                     _uiState.value = _uiState.value.copy(error = "No servers to backup")
                     return@launch
                 }
-                AppLogger.log("BACKUP", "Getting session key, isSet=${SessionKeyHolder.isSet()}")
-                val key = SessionKeyHolder.get()
+
+                // Step 2: Serialize
                 val backupList = vpsList.map { v ->
-                    mapOf(
-                        "alias" to v.alias, "host" to v.host, "port" to v.port,
+                    mapOf("alias" to v.alias, "host" to v.host, "port" to v.port,
                         "username" to v.username, "authType" to v.authType,
                         "encryptedPassword" to v.encryptedPassword,
                         "encryptedKeyContent" to v.encryptedKeyContent,
                         "encryptedKeyPassphrase" to v.encryptedKeyPassphrase,
-                        "createdAt" to v.createdAt, "updatedAt" to v.updatedAt
-                    )
+                        "createdAt" to v.createdAt, "updatedAt" to v.updatedAt)
                 }
                 val json = gson.toJson(backupList)
-                AppLogger.log("BACKUP", "JSON length: ${json.length}")
-                val encrypted = fieldCrypto.encrypt(json, key) ?: json
-                AppLogger.log("BACKUP", "Encrypted length: ${encrypted.length}")
+                AppLogger.log("BACKUP", "JSON size: ${json.length}")
 
+                // Step 3: Encrypt
+                val dataToWrite: String = try {
+                    if (SessionKeyHolder.isSet()) {
+                        val key = SessionKeyHolder.get()
+                        AppLogger.log("BACKUP", "Session key set, encrypting...")
+                        fieldCrypto.encrypt(json, key) ?: json
+                    } else {
+                        AppLogger.log("BACKUP", "Session key NOT set, writing plain JSON")
+                        json
+                    }
+                } catch (e: Exception) {
+                    AppLogger.log("BACKUP", "Encryption failed, writing plain", e)
+                    json
+                }
+                AppLogger.log("BACKUP", "Data size: ${dataToWrite.length}")
+
+                // Step 4: Write to temp file first (to verify data is correct)
+                val tempFile = java.io.File(context.cacheDir, "sbssh_backup_temp.enc")
+                tempFile.writeText(dataToWrite, Charsets.UTF_8)
+                AppLogger.log("BACKUP", "Wrote ${tempFile.length()} bytes to temp file")
+
+                // Step 5: Copy temp file to user-selected URI
+                val bytes = tempFile.readBytes()
                 context.contentResolver.openOutputStream(uri)?.use { output ->
-                    val bytes = encrypted.toByteArray(Charsets.UTF_8)
                     output.write(bytes)
                     output.flush()
-                    AppLogger.log("BACKUP", "Wrote ${bytes.size} bytes to uri")
+                    AppLogger.log("BACKUP", "Copied ${bytes.size} bytes to URI")
+                } ?: run {
+                    AppLogger.log("BACKUP", "openOutputStream returned null!")
                 }
-                _uiState.value = _uiState.value.copy(success = "Backup saved successfully")
+
+                // Step 6: Clean up temp file
+                tempFile.delete()
+
+                _uiState.value = _uiState.value.copy(success = "Backup saved (${bytes.size} bytes)")
             } catch (e: Exception) {
-                AppLogger.log("BACKUP", "Backup failed", e)
+                AppLogger.log("BACKUP", "Backup FAILED", e)
                 _uiState.value = _uiState.value.copy(error = "Backup failed: ${e.javaClass.simpleName}: ${e.message}")
             }
         }
