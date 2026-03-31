@@ -43,6 +43,27 @@ data class SettingsUiState(
     val cloudSyncUsername: String = ""
 )
 
+// Backup format wrapper (v1)
+data class BackupEnvelope(
+    val format: String = "sbssh_backup_v1",
+    val encrypted: Boolean = false,
+    val payload: String = "",
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+data class BackupItem(
+    val alias: String,
+    val host: String,
+    val port: Int,
+    val username: String,
+    val authType: String,
+    val encryptedPassword: String?,
+    val encryptedKeyContent: String?,
+    val encryptedKeyPassphrase: String?,
+    val createdAt: Long,
+    val updatedAt: Long
+)
+
 class SettingsViewModel(
     private val context: Context,
     private val activity: AppCompatActivity? = null
@@ -157,31 +178,39 @@ class SettingsViewModel(
 
                 // Step 2: Serialize
                 val backupList = vpsList.map { v ->
-                    mapOf("alias" to v.alias, "host" to v.host, "port" to v.port,
-                        "username" to v.username, "authType" to v.authType,
-                        "encryptedPassword" to v.encryptedPassword,
-                        "encryptedKeyContent" to v.encryptedKeyContent,
-                        "encryptedKeyPassphrase" to v.encryptedKeyPassphrase,
-                        "createdAt" to v.createdAt, "updatedAt" to v.updatedAt)
+                    BackupItem(
+                        alias = v.alias,
+                        host = v.host,
+                        port = v.port,
+                        username = v.username,
+                        authType = v.authType,
+                        encryptedPassword = v.encryptedPassword,
+                        encryptedKeyContent = v.encryptedKeyContent,
+                        encryptedKeyPassphrase = v.encryptedKeyPassphrase,
+                        createdAt = v.createdAt,
+                        updatedAt = v.updatedAt
+                    )
                 }
                 val json = gson.toJson(backupList)
                 AppLogger.log("BACKUP", "JSON size: ${json.length}")
 
-                // Step 3: Encrypt
-                val dataToWrite: String = try {
+                // Step 3: Encrypt (if session key available) and wrap in envelope
+                val (encrypted, payload) = try {
                     if (SessionKeyHolder.isSet()) {
                         val key = SessionKeyHolder.get()
-                        AppLogger.log("BACKUP", "Session key set, encrypting...")
-                        fieldCrypto.encrypt(json, key) ?: json
+                        AppLogger.log("BACKUP", "Session key set, encrypting payload...")
+                        true to (fieldCrypto.encrypt(json, key) ?: json)
                     } else {
-                        AppLogger.log("BACKUP", "Session key NOT set, writing plain JSON")
-                        json
+                        AppLogger.log("BACKUP", "Session key NOT set, writing plain payload")
+                        false to json
                     }
                 } catch (e: Exception) {
                     AppLogger.log("BACKUP", "Encryption failed, writing plain", e)
-                    json
+                    false to json
                 }
-                AppLogger.log("BACKUP", "Data size: ${dataToWrite.length}")
+                val envelope = BackupEnvelope(encrypted = encrypted, payload = payload)
+                val dataToWrite = gson.toJson(envelope)
+                AppLogger.log("BACKUP", "Envelope size: ${dataToWrite.length}, encrypted=$encrypted")
 
                 // Step 4: Write to temp file first (to verify data is correct)
                 val tempFile = java.io.File(context.cacheDir, "sbssh_backup_temp.enc")
@@ -211,34 +240,81 @@ class SettingsViewModel(
 
     // ========== Restore ==========
     fun restoreServers(uri: Uri) {
+        AppLogger.log("RESTORE", "restoreServers: uri=$uri")
         viewModelScope.launch {
             try {
-                if (dao == null) { _uiState.value = _uiState.value.copy(error = "Database not initialized"); return@launch }
+                if (dao == null) {
+                    AppLogger.log("RESTORE", "DAO is null")
+                    _uiState.value = _uiState.value.copy(error = "Database not initialized")
+                    return@launch
+                }
                 val content = context.contentResolver.openInputStream(uri)?.bufferedReader()?.readText()
                     ?: throw Exception("Failed to read backup file")
-                val key = SessionKeyHolder.get()
-                val json = try { fieldCrypto.decrypt(content, key) ?: content } catch (_: Exception) { content }
-                val type = object : TypeToken<List<Map<String, Any>>>() {}.type
-                val backupList: List<Map<String, Any>> = gson.fromJson(json, type)
+                AppLogger.log("RESTORE", "Read ${content.length} chars from file")
+
+                // Try to parse new envelope format first
+                val envelope = try { gson.fromJson(content, BackupEnvelope::class.java) } catch (_: Exception) { null }
+
+                val payload: String
+                val encrypted: Boolean
+                if (envelope != null && envelope.format == "sbssh_backup_v1") {
+                    encrypted = envelope.encrypted
+                    payload = envelope.payload
+                    AppLogger.log("RESTORE", "Envelope detected, encrypted=$encrypted")
+                } else {
+                    // Legacy format: raw encrypted string or raw JSON
+                    encrypted = false
+                    payload = content
+                    AppLogger.log("RESTORE", "Legacy backup format detected")
+                }
+
+                val json = if (encrypted) {
+                    if (!SessionKeyHolder.isSet()) {
+                        AppLogger.log("RESTORE", "Session key NOT set, cannot decrypt")
+                        _uiState.value = _uiState.value.copy(error = "Please unlock app before restore")
+                        return@launch
+                    }
+                    val key = SessionKeyHolder.get()
+                    AppLogger.log("RESTORE", "Decrypting payload...")
+                    fieldCrypto.decrypt(payload, key) ?: throw Exception("Decrypt failed")
+                } else {
+                    // If legacy content might be encrypted, try decrypt when key is available
+                    if (SessionKeyHolder.isSet()) {
+                        val key = SessionKeyHolder.get()
+                        try {
+                            fieldCrypto.decrypt(payload, key) ?: payload
+                        } catch (_: Exception) {
+                            payload
+                        }
+                    } else {
+                        payload
+                    }
+                }
+
+                AppLogger.log("RESTORE", "JSON size: ${json.length}")
+                val type = object : TypeToken<List<BackupItem>>() {}.type
+                val backupList: List<BackupItem> = gson.fromJson(json, type)
                 val now = System.currentTimeMillis()
                 var count = 0
                 for (item in backupList) {
                     dao!!.insertVps(VpsEntity(
-                        alias = item["alias"] as? String ?: "Unknown",
-                        host = item["host"] as? String ?: "0.0.0.0",
-                        port = (item["port"] as? Double)?.toInt() ?: 22,
-                        username = item["username"] as? String ?: "root",
-                        authType = item["authType"] as? String ?: "PASSWORD",
-                        encryptedPassword = item["encryptedPassword"] as? String,
-                        encryptedKeyContent = item["encryptedKeyContent"] as? String,
-                        encryptedKeyPassphrase = item["encryptedKeyPassphrase"] as? String,
-                        createdAt = (item["createdAt"] as? Double)?.toLong() ?: now,
-                        updatedAt = (item["updatedAt"] as? Double)?.toLong() ?: now
+                        alias = item.alias.ifBlank { "Unknown" },
+                        host = item.host.ifBlank { "0.0.0.0" },
+                        port = item.port,
+                        username = item.username.ifBlank { "root" },
+                        authType = item.authType,
+                        encryptedPassword = item.encryptedPassword,
+                        encryptedKeyContent = item.encryptedKeyContent,
+                        encryptedKeyPassphrase = item.encryptedKeyPassphrase,
+                        createdAt = if (item.createdAt > 0) item.createdAt else now,
+                        updatedAt = if (item.updatedAt > 0) item.updatedAt else now
                     ))
                     count++
                 }
+                AppLogger.log("RESTORE", "Restored $count server(s)")
                 _uiState.value = _uiState.value.copy(success = "Restored $count server(s)")
             } catch (e: Exception) {
+                AppLogger.log("RESTORE", "Restore FAILED", e)
                 _uiState.value = _uiState.value.copy(error = "Restore failed: ${e.message}")
             }
         }
