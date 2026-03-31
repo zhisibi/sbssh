@@ -2,7 +2,6 @@ package com.sbssh.ui.terminal
 
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -22,8 +21,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -42,14 +44,15 @@ fun TerminalScreen(
     )
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    val quickCommands = listOf("ls", "cd ..", "pwd", "top", "df -h", "free -h", "ps aux", "clear")
-
     val keyButtons = listOf(
         "ESC" to "\u001B",
         "TAB" to "\t",
+        "CTRL+A" to "\u0001",
+        "CTRL+E" to "\u0005",
         "CTRL+C" to "\u0003",
         "CTRL+Z" to "\u001A",
         "CTRL+L" to "\u000C",
+        "ALT" to "\u001B",
         "↑" to "\u001B[A",
         "↓" to "\u001B[B",
         "←" to "\u001B[D",
@@ -64,28 +67,33 @@ fun TerminalScreen(
 
     val focusRequester = remember { FocusRequester() }
     var inputBuffer by remember { mutableStateOf("") }
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    val activeTab = uiState.tabs.find { it.id == uiState.activeTabId }
-                    Text(activeTab?.vpsAlias ?: "Terminal")
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { viewModel.addTab() }) {
-                        Icon(Icons.Default.Add, contentDescription = "New Tab")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
+            if (!imeVisible) {
+                TopAppBar(
+                    title = {
+                        val activeTab = uiState.tabs.find { it.id == uiState.activeTabId }
+                        Text(activeTab?.vpsAlias ?: "Terminal", maxLines = 1)
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = { viewModel.addTab() }) {
+                            Icon(Icons.Default.Add, contentDescription = "New Tab")
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(0.33f),
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                    )
                 )
-            )
+            }
         }
     ) { padding ->
         Column(
@@ -138,7 +146,10 @@ fun TerminalScreen(
                     .fillMaxWidth()
                     .background(TerminalBg)
                     .pointerInput(Unit) {
-                        detectTapGestures(onTap = { focusRequester.requestFocus() })
+                        detectTapGestures(onTap = {
+                            focusRequester.requestFocus()
+                            keyboardController?.show()
+                        })
                     }
             ) {
                 when {
@@ -184,6 +195,7 @@ fun TerminalScreen(
                         inputBuffer = new
                         if (inputBuffer.length > 32) inputBuffer = ""
                     },
+
                     modifier = Modifier
                         .size(1.dp)
                         .focusRequester(focusRequester),
@@ -192,40 +204,21 @@ fun TerminalScreen(
                 )
             }
 
-            // Quick commands + function keys bar (above keyboard)
-            Column(
+            // Shortcut bar (single row), floats above IME
+            LazyRow(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(MaterialTheme.colorScheme.surface)
-                    .windowInsetsPadding(WindowInsets.ime)
+                    .imePadding()
+                    .padding(horizontal = 6.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                LazyRow(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    items(quickCommands) { cmd ->
-                        AssistChip(
-                            onClick = { viewModel.sendCommand(cmd) },
-                            label = { Text(cmd, style = MaterialTheme.typography.labelSmall) },
-                            enabled = activeTab?.isConnected == true
-                        )
-                    }
-                }
-                LazyRow(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    items(keyButtons) { (label, code) ->
-                        AssistChip(
-                            onClick = { viewModel.sendRaw(code) },
-                            label = { Text(label, style = MaterialTheme.typography.labelSmall) },
-                            enabled = activeTab?.isConnected == true
-                        )
-                    }
+                items(keyButtons) { (label, code) ->
+                    AssistChip(
+                        onClick = { viewModel.sendRaw(code) },
+                        label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+                        enabled = activeTab?.isConnected == true
+                    )
                 }
             }
         }
