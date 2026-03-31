@@ -102,6 +102,9 @@ dependencies {
     // JSch for SSH/SFTP
     implementation("com.jcraft:jsch:0.1.55")
 
+    // Gson for JSON backup/restore
+    implementation("com.google.code.gson:gson:2.10.1")
+
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 

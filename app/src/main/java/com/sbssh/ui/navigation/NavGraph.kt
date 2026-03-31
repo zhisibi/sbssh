@@ -9,6 +9,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.sbssh.ui.auth.MasterPasswordScreen
 import com.sbssh.ui.sftp.SftpScreen
+import com.sbssh.ui.settings.SettingsScreen
 import com.sbssh.ui.terminal.TerminalScreen
 import com.sbssh.ui.vpslist.AddEditVpsScreen
 import com.sbssh.ui.vpslist.VpsListScreen
@@ -20,6 +21,7 @@ object Routes {
     const val EDIT_VPS = "edit_vps/{vpsId}"
     const val TERMINAL = "terminal/{vpsId}"
     const val SFTP = "sftp/{vpsId}"
+    const val SETTINGS = "settings"
 
     fun editVps(vpsId: Long) = "edit_vps/$vpsId"
     fun terminal(vpsId: Long) = "terminal/$vpsId"
@@ -49,7 +51,8 @@ fun NavGraph(
                 onAddVps = { navController.navigate(Routes.ADD_VPS) },
                 onEditVps = { id -> navController.navigate(Routes.editVps(id)) },
                 onConnectTerminal = { id -> navController.navigate(Routes.terminal(id)) },
-                onConnectSftp = { id -> navController.navigate(Routes.sftp(id)) }
+                onConnectSftp = { id -> navController.navigate(Routes.sftp(id)) },
+                onSettings = { navController.navigate(Routes.SETTINGS) }
             )
         }
 
@@ -91,6 +94,12 @@ fun NavGraph(
             val vpsId = backStackEntry.arguments?.getLong("vpsId") ?: return@composable
             SftpScreen(
                 vpsId = vpsId,
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Routes.SETTINGS) {
+            SettingsScreen(
                 onBack = { navController.popBackStack() }
             )
         }

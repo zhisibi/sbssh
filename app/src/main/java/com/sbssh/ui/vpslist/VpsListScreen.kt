@@ -22,7 +22,8 @@ fun VpsListScreen(
     onAddVps: () -> Unit,
     onEditVps: (Long) -> Unit,
     onConnectTerminal: (Long) -> Unit,
-    onConnectSftp: (Long) -> Unit
+    onConnectSftp: (Long) -> Unit,
+    onSettings: () -> Unit
 ) {
     val viewModel: VpsListViewModel = viewModel(factory = VpsListViewModel.Factory())
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -42,30 +43,9 @@ fun VpsListScreen(
                             onDismissRequest = { showSettingsMenu = false }
                         ) {
                             DropdownMenuItem(
-                                text = { Text("Language") },
-                                onClick = { showSettingsMenu = false },
-                                leadingIcon = { Icon(Icons.Default.Language, contentDescription = null) }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Font Size") },
-                                onClick = { showSettingsMenu = false },
-                                leadingIcon = { Icon(Icons.Default.FormatSize, contentDescription = null) }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Server Backup") },
-                                onClick = { showSettingsMenu = false },
-                                leadingIcon = { Icon(Icons.Default.Backup, contentDescription = null) }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Server Restore") },
-                                onClick = { showSettingsMenu = false },
-                                leadingIcon = { Icon(Icons.Default.Restore, contentDescription = null) }
-                            )
-                            Divider()
-                            DropdownMenuItem(
-                                text = { Text("About") },
-                                onClick = { showSettingsMenu = false },
-                                leadingIcon = { Icon(Icons.Default.Info, contentDescription = null) }
+                                text = { Text("Settings") },
+                                onClick = { showSettingsMenu = false; onSettings() },
+                                leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) }
                             )
                         }
                     }

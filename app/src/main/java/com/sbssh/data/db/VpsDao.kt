@@ -13,6 +13,9 @@ interface VpsDao {
     @Query("SELECT * FROM vps ORDER BY updatedAt DESC")
     fun getAllVps(): Flow<List<VpsEntity>>
 
+    @Query("SELECT * FROM vps ORDER BY updatedAt DESC")
+    suspend fun getAllVpsAsList(): List<VpsEntity>
+
     @Query("SELECT * FROM vps WHERE id = :id")
     suspend fun getVpsById(id: Long): VpsEntity?
 
