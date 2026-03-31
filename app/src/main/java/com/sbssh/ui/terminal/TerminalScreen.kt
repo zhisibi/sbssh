@@ -1,10 +1,9 @@
 package com.sbssh.ui.terminal
 
-import android.annotation.SuppressLint
-import android.view.ViewGroup
-import android.webkit.WebView
-import android.webkit.WebViewClient
+
 import androidx.compose.foundation.background
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -17,14 +16,16 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.sbssh.ui.theme.TerminalBg
@@ -42,6 +43,27 @@ fun TerminalScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     val quickCommands = listOf("ls", "cd ..", "pwd", "top", "df -h", "free -h", "ps aux", "clear")
+
+    val keyButtons = listOf(
+        "ESC" to "\u001B",
+        "TAB" to "\t",
+        "CTRL+C" to "\u0003",
+        "CTRL+Z" to "\u001A",
+        "CTRL+L" to "\u000C",
+        "↑" to "\u001B[A",
+        "↓" to "\u001B[B",
+        "←" to "\u001B[D",
+        "→" to "\u001B[C",
+        "HOME" to "\u001B[H",
+        "END" to "\u001B[F",
+        "PGUP" to "\u001B[5~",
+        "PGDN" to "\u001B[6~",
+        "DEL" to "\u001B[3~",
+        "ENTER" to "\r"
+    )
+
+    val focusRequester = remember { FocusRequester() }
+    var inputBuffer by remember { mutableStateOf("") }
 
     Scaffold(
         topBar = {
@@ -115,6 +137,9 @@ fun TerminalScreen(
                     .weight(1f)
                     .fillMaxWidth()
                     .background(TerminalBg)
+                    .pointerInput(Unit) {
+                        detectTapGestures(onTap = { focusRequester.requestFocus() })
+                    }
             ) {
                 when {
                     activeTab == null -> {
@@ -143,71 +168,70 @@ fun TerminalScreen(
                         )
                     }
                 }
-            }
 
-            // Quick commands
-            LazyRow(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surface)
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                items(quickCommands) { cmd ->
-                    AssistChip(
-                        onClick = { viewModel.sendCommand(cmd) },
-                        label = { Text(cmd, style = MaterialTheme.typography.labelSmall) },
-                        enabled = activeTab?.isConnected == true
-                    )
-                }
-            }
-
-            // Command input
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surface)
-                    .padding(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+                // Hidden input field to capture keyboard typing
                 BasicTextField(
-                    value = uiState.commandInput,
-                    onValueChange = viewModel::updateCommandInput,
-                    textStyle = TextStyle(
-                        color = TerminalGreen,
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 14.sp
-                    ),
-                    cursorBrush = SolidColor(TerminalGreen),
-                    modifier = Modifier
-                        .weight(1f)
-                        .background(TerminalBg)
-                        .padding(8.dp),
-                    decorationBox = {
-                        if (uiState.commandInput.isEmpty()) {
-                            Text("Type command...", color = TerminalGreen.copy(alpha = 0.5f), fontSize = 14.sp)
+                    value = inputBuffer,
+                    onValueChange = { new ->
+                        val old = inputBuffer
+                        if (new.length > old.length) {
+                            val add = new.substring(old.length)
+                            viewModel.sendRaw(add)
+                        } else if (new.length < old.length) {
+                            val count = old.length - new.length
+                            if (count > 0) viewModel.sendRaw("\b".repeat(count))
                         }
-                        it()
-                    }
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                IconButton(
-                    onClick = {
-                        if (uiState.commandInput.isNotBlank()) {
-                            viewModel.sendCommand(uiState.commandInput)
-                            viewModel.updateCommandInput("")
-                        }
+                        inputBuffer = new
+                        if (inputBuffer.length > 32) inputBuffer = ""
                     },
-                    enabled = activeTab?.isConnected == true
+                    modifier = Modifier
+                        .size(1.dp)
+                        .focusRequester(focusRequester),
+                    textStyle = TextStyle(color = Color.Transparent),
+                    cursorBrush = SolidColor(Color.Transparent)
+                )
+            }
+
+            // Quick commands + function keys bar (above keyboard)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surface)
+                    .windowInsetsPadding(WindowInsets.ime)
+            ) {
+                LazyRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Icon(Icons.Default.Send, contentDescription = "Send", tint = TerminalGreen)
+                    items(quickCommands) { cmd ->
+                        AssistChip(
+                            onClick = { viewModel.sendCommand(cmd) },
+                            label = { Text(cmd, style = MaterialTheme.typography.labelSmall) },
+                            enabled = activeTab?.isConnected == true
+                        )
+                    }
+                }
+                LazyRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    items(keyButtons) { (label, code) ->
+                        AssistChip(
+                            onClick = { viewModel.sendRaw(code) },
+                            label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+                            enabled = activeTab?.isConnected == true
+                        )
+                    }
                 }
             }
         }
     }
 }
 
-@SuppressLint("SetJavaScriptEnabled")
 @Composable
 private fun TerminalOutput(
     output: String,
