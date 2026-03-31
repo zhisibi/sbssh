@@ -42,10 +42,10 @@ fun TerminalScreen(
     val terminalViewRef = remember { mutableStateOf<TerminalView?>(null) }
     val termSession = remember {
         TerminalSession(
-            "/system/bin/true",
+            "/system/bin/sh",
             "/",
-            arrayOf("true"),
-            emptyArray(),
+            arrayOf("-c", "cat"),
+            arrayOf("TERM=xterm-256color", "PS1=", "PROMPT_COMMAND="),
             object : TerminalSession.SessionChangedCallback {
                 override fun onTextChanged(session: TerminalSession) {
                     terminalViewRef.value?.onScreenUpdated()
@@ -231,6 +231,11 @@ fun TerminalScreen(
                         override fun onCodePoint(codePoint: Int, ctrlDown: Boolean, session: TerminalSession) = false
                         override fun onLongPress(e: android.view.MotionEvent) = false
                     })
+                    view.setOnTouchListener { v, _ ->
+                        v.requestFocus()
+                        keyboardController?.show()
+                        false
+                    }
                     view.attachSession(termSession)
                     terminalViewRef.value = view
                     view.requestFocus()
@@ -242,6 +247,7 @@ fun TerminalScreen(
                     if (view.getCurrentSession() != termSession) {
                         view.attachSession(termSession)
                     }
+                    view.requestFocus()
                 }
             )
         }
