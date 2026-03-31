@@ -236,7 +236,7 @@ fun TerminalScreen(
                             }
                         } else if (new.length < old.length) {
                             val count = old.length - new.length
-                            if (count > 0) viewModel.sendRaw("\b".repeat(count))
+                            if (count > 0) viewModel.sendRaw("\u007F".repeat(count))
                         }
                         inputBuffer = new
                         if (inputBuffer.length > 32) inputBuffer = ""
@@ -266,9 +266,16 @@ private fun TerminalOutput(
     // In a production app, you'd use a proper terminal emulator
     Box(modifier = modifier) {
         val scrollState = rememberScrollState()
+        var cursorOn by remember { mutableStateOf(true) }
 
         LaunchedEffect(output.length) {
             scrollState.animateScrollTo(scrollState.maxValue)
+        }
+        LaunchedEffect(isConnected) {
+            while (isConnected) {
+                cursorOn = !cursorOn
+                delay(500)
+            }
         }
 
         Column(
@@ -282,28 +289,21 @@ private fun TerminalOutput(
                     error,
                     color = Color.Red,
                     fontFamily = FontFamily.Monospace,
-                    fontSize = 13.sp
+                    fontSize = 7.sp,
+                    lineHeight = 9.sp
                 )
             }
 
-            // ANSI-stripped output display
+            // ANSI-stripped output display + blinking cursor
             val cleanOutput = output.replace(Regex("\u001B\\[[;\\d]*m"), "")
             Text(
-                cleanOutput,
+                cleanOutput + if (isConnected && cursorOn) "▌" else "",
                 color = TerminalGreen,
                 fontFamily = FontFamily.Monospace,
-                fontSize = 13.sp,
+                fontSize = 7.sp,
+                lineHeight = 9.sp,
                 softWrap = true
             )
-
-            if (isConnected) {
-                Text(
-                    "█",
-                    color = TerminalGreen,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 13.sp
-                )
-            }
         }
     }
 }
