@@ -103,6 +103,10 @@ dependencies {
     // JSch for SSH/SFTP
     implementation("com.jcraft:jsch:0.1.55")
 
+    // Termux terminal (GPL-3.0)
+    implementation("com.termux:terminal-emulator:+")
+    implementation("com.termux:terminal-view:+")
+
     // Gson for JSON backup/restore
     implementation("com.google.code.gson:gson:2.10.1")
 

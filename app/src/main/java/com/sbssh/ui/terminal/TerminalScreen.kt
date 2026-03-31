@@ -2,37 +2,28 @@ package com.sbssh.ui.terminal
 
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.draw.alpha
-import kotlinx.coroutines.delay
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.termux.terminal.TerminalSession
+import com.termux.view.TerminalView
+import com.termux.view.TerminalViewClient
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import com.sbssh.ui.theme.TerminalBg
-import com.sbssh.ui.theme.TerminalGreen
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,18 +36,53 @@ fun TerminalScreen(
     )
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    val focusRequester = remember { FocusRequester() }
-    var inputBuffer by remember { mutableStateOf("") }
-    var ctrlMode by remember { mutableStateOf(false) }
     val keyboardController = LocalSoftwareKeyboardController.current
+    var ctrlMode by remember { mutableStateOf(false) }
+
+    val terminalViewRef = remember { mutableStateOf<TerminalView?>(null) }
+    val termSession = remember {
+        TerminalSession(
+            "/system/bin/true",
+            "/",
+            arrayOf("true"),
+            emptyArray(),
+            object : TerminalSession.SessionChangedCallback {
+                override fun onTextChanged(session: TerminalSession) {
+                    terminalViewRef.value?.onScreenUpdated()
+                }
+                override fun onTitleChanged(session: TerminalSession) {}
+                override fun onSessionFinished(session: TerminalSession) {}
+                override fun onClipboardText(session: TerminalSession, text: String) {}
+                override fun onBell(session: TerminalSession) {}
+                override fun onColorsChanged(session: TerminalSession) {
+                    terminalViewRef.value?.onScreenUpdated()
+                }
+            }
+        )
+    }
 
     val activeTab = uiState.tabs.find { it.id == uiState.activeTabId }
 
-    LaunchedEffect(activeTab?.isConnected) {
-        if (activeTab?.isConnected == true) {
-            delay(200)
-            focusRequester.requestFocus()
-            keyboardController?.show()
+    LaunchedEffect(termSession) {
+        viewModel.attachTerminalSession(termSession)
+
+        // Pump input from TerminalSession -> SSH
+        withContext(Dispatchers.IO) {
+            val queueField = termSession.javaClass.getDeclaredField("mTerminalToProcessIOQueue")
+            queueField.isAccessible = true
+            val queue = queueField.get(termSession)
+            val readMethod = queue.javaClass.getDeclaredMethod("read", ByteArray::class.java, Boolean::class.javaPrimitiveType)
+            readMethod.isAccessible = true
+            val buffer = ByteArray(4096)
+            while (true) {
+                val count = readMethod.invoke(queue, buffer, true) as Int
+                if (count > 0) {
+                    val text = String(buffer, 0, count, Charsets.ISO_8859_1)
+                    viewModel.sendRaw(text)
+                } else {
+                    delay(10)
+                }
+            }
         }
     }
 
@@ -179,131 +205,44 @@ fun TerminalScreen(
             }
 
             // Terminal output area
-            Box(
+            AndroidView(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
                     .background(TerminalBg)
-                    .windowInsetsPadding(WindowInsets.ime)
-                    .pointerInput(Unit) {
-                        detectTapGestures(onTap = {
-                            focusRequester.requestFocus()
+                    .windowInsetsPadding(WindowInsets.ime),
+                factory = { context: android.content.Context ->
+                    val view = TerminalView(context, null)
+                    view.isFocusable = true
+                    view.isFocusableInTouchMode = true
+                    view.setTextSize(12)
+                    view.setOnKeyListener(object : TerminalViewClient {
+                        override fun onScale(scale: Float) = 1.0f
+                        override fun onSingleTapUp(e: android.view.MotionEvent) {
+                            view.requestFocus()
                             keyboardController?.show()
-                        })
-                    }
-            ) {
-                when {
-                    activeTab == null -> {
-                        Text(
-                            "No active session",
-                            color = TerminalGreen,
-                            modifier = Modifier.padding(16.dp)
-                        )
-                    }
-                    activeTab.isConnecting -> {
-                        Text(
-                            "Connecting...",
-                            color = TerminalGreen,
-                            modifier = Modifier
-                                .align(Alignment.Center)
-                                .padding(16.dp)
-                        )
-                    }
-                    else -> {
-                        TerminalOutput(
-                            output = activeTab.output,
-                            isConnected = activeTab.isConnected,
-                            error = activeTab.error,
-                            onInput = { viewModel.sendRaw(it) },
-                            modifier = Modifier.fillMaxSize()
-                        )
+                        }
+                        override fun shouldBackButtonBeMappedToEscape() = false
+                        override fun copyModeChanged(copyMode: Boolean) {}
+                        override fun onKeyDown(keyCode: Int, e: android.view.KeyEvent, session: TerminalSession) = false
+                        override fun onKeyUp(keyCode: Int, e: android.view.KeyEvent) = false
+                        override fun readControlKey() = ctrlMode
+                        override fun readAltKey() = false
+                        override fun onCodePoint(codePoint: Int, ctrlDown: Boolean, session: TerminalSession) = false
+                        override fun onLongPress(e: android.view.MotionEvent) = false
+                    })
+                    view.attachSession(termSession)
+                    terminalViewRef.value = view
+                    view.requestFocus()
+                    keyboardController?.show()
+                    view
+                },
+                update = { view: TerminalView ->
+                    terminalViewRef.value = view
+                    if (view.getCurrentSession() != termSession) {
+                        view.attachSession(termSession)
                     }
                 }
-
-                // Hidden input field to capture keyboard typing
-                BasicTextField(
-                    value = inputBuffer,
-                    onValueChange = { new ->
-                        val old = inputBuffer
-                        if (new.length > old.length) {
-                            val add = new.substring(old.length)
-                            if (ctrlMode && add.isNotEmpty()) {
-                                val ch = add.last()
-                                val code = if (ch in 'a'..'z') (ch.code - 96) else if (ch in 'A'..'Z') (ch.code - 64) else ch.code
-                                viewModel.sendRaw(code.toChar().toString())
-                                ctrlMode = false
-                            } else {
-                                viewModel.sendRaw(add)
-                            }
-                        } else if (new.length < old.length) {
-                            val count = old.length - new.length
-                            if (count > 0) viewModel.sendRaw("\b".repeat(count))
-                        }
-                        inputBuffer = new
-                        if (inputBuffer.length > 32) inputBuffer = ""
-                    },
-
-                    modifier = Modifier
-                        .size(1.dp)
-                        .focusRequester(focusRequester)
-                        .alpha(0f),
-                    textStyle = TextStyle(color = Color.Transparent),
-                    cursorBrush = SolidColor(Color.Transparent)
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun TerminalOutput(
-    output: String,
-    isConnected: Boolean,
-    error: String?,
-    onInput: (String) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    // Using a simple scrollable text view for terminal output
-    // In a production app, you'd use a proper terminal emulator
-    Box(modifier = modifier) {
-        val scrollState = rememberScrollState()
-        var cursorOn by remember { mutableStateOf(true) }
-
-        LaunchedEffect(output.length) {
-            scrollState.animateScrollTo(scrollState.maxValue)
-        }
-        LaunchedEffect(isConnected) {
-            while (isConnected) {
-                cursorOn = !cursorOn
-                delay(500)
-            }
-        }
-
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(8.dp)
-                .verticalScroll(scrollState)
-        ) {
-            if (error != null && !isConnected) {
-                Text(
-                    error,
-                    color = Color.Red,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 7.sp,
-                    lineHeight = 9.sp
-                )
-            }
-
-            // ANSI-stripped output display + blinking cursor
-            val cleanOutput = output.replace(Regex("\u001B\\[[;\\d]*m"), "")
-            Text(
-                cleanOutput + if (isConnected && cursorOn) "▌" else "",
-                color = TerminalGreen,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 7.sp,
-                lineHeight = 9.sp,
-                softWrap = true
             )
         }
     }

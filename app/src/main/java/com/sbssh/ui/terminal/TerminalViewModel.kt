@@ -34,6 +34,7 @@ class TerminalViewModel(private val vpsId: Long) : ViewModel() {
     private var dao = runCatching { AppDatabase.getInstance().vpsDao() }.getOrNull()
     private val sessions = mutableMapOf<Int, SshSessionManager>()
     private var tabCounter = 0
+    private var terminalSession: com.termux.terminal.TerminalSession? = null
 
     private val _uiState = MutableStateFlow(TerminalUiState())
     val uiState: StateFlow<TerminalUiState> = _uiState.asStateFlow()
@@ -71,6 +72,9 @@ class TerminalViewModel(private val vpsId: Long) : ViewModel() {
         sessions[tabId] = manager
 
         manager.onDataReceived = { data ->
+            // Feed Termux terminal session if attached
+            terminalSession?.write(data.toByteArray(), 0, data.toByteArray().size)
+
             val tabs = _uiState.value.tabs.toMutableList()
             val idx = tabs.indexOfFirst { it.id == tabId }
             if (idx >= 0) {
@@ -154,6 +158,10 @@ class TerminalViewModel(private val vpsId: Long) : ViewModel() {
 
     fun updateCommandInput(input: String) {
         _uiState.value = _uiState.value.copy(commandInput = input)
+    }
+
+    fun attachTerminalSession(session: com.termux.terminal.TerminalSession) {
+        terminalSession = session
     }
 
     override fun onCleared() {
