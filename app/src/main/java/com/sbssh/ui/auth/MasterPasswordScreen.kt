@@ -157,28 +157,31 @@ fun MasterPasswordScreen(
                 Spacer(modifier = Modifier.height(16.dp))
                 OutlinedButton(
                     onClick = {
-                        val cipher = cryptoManager.getBiometricCipher()
-                        val cryptoObject = androidx.biometric.BiometricPrompt.CryptoObject(cipher)
-                        BiometricHelper.showBiometricPromptWithCrypto(
-                            activity = activity,
-                            cryptoObject = cryptoObject,
-                            onSuccess = { co ->
+                        // Simple biometric prompt (no CryptoObject, like WebSSH)
+                        val executor = androidx.core.content.ContextCompat.getMainExecutor(context)
+                        val callback = object : androidx.biometric.BiometricPrompt.AuthenticationCallback() {
+                            override fun onAuthenticationSucceeded(result: androidx.biometric.BiometricPrompt.AuthenticationResult) {
+                                super.onAuthenticationSucceeded(result)
                                 try {
-                                    val decrypted = cryptoManager.decryptKeyWithBiometric(
-                                        co?.cipher ?: return@showBiometricPromptWithCrypto
-                                    )
-                                    viewModel.unlockWithBiometric(decrypted)
+                                    val keyBytes = cryptoManager.getBiometricKey()
+                                    viewModel.unlockWithBiometric(keyBytes)
                                 } catch (e: Exception) {
                                     Toast.makeText(context, "Biometric error: ${e.message}", Toast.LENGTH_SHORT).show()
                                 }
-                            },
-                            onError = { _, errString ->
-                                Toast.makeText(context, errString, Toast.LENGTH_SHORT).show()
-                            },
-                            onFailed = {
-                                Toast.makeText(context, "Biometric not recognized", Toast.LENGTH_SHORT).show()
                             }
-                        )
+                            override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                                super.onAuthenticationError(errorCode, errString)
+                                Toast.makeText(context, errString, Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                        val promptInfo = androidx.biometric.BiometricPrompt.PromptInfo.Builder()
+                            .setTitle("Biometric Authentication")
+                            .setSubtitle("Use your fingerprint to unlock")
+                            .setNegativeButtonText("Cancel")
+                            .setAllowedAuthenticators(androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG)
+                            .build()
+                        val biometricPrompt = androidx.biometric.BiometricPrompt(activity, executor, callback)
+                        biometricPrompt.authenticate(promptInfo)
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) {

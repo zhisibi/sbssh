@@ -2,15 +2,8 @@ package com.sbssh.data.crypto
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.security.keystore.KeyGenParameterSpec
-import android.security.keystore.KeyProperties
-import java.security.KeyStore
 import java.security.SecureRandom
-import javax.crypto.Cipher
-import javax.crypto.KeyGenerator
-import javax.crypto.SecretKey
 import javax.crypto.SecretKeyFactory
-import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.PBEKeySpec
 import android.util.Base64
 import com.sbssh.util.AppLogger
@@ -66,80 +59,31 @@ class CryptoManager(private val context: Context) {
         return Pair(keyBytes, hexKey)
     }
 
-    fun storeBiometricKey(keyBytes: ByteArray) {
-        val keyAlias = "sbssh_biometric_key"
-        try {
-            val ks = KeyStore.getInstance("AndroidKeyStore")
-            ks.load(null)
-            if (ks.containsAlias(keyAlias)) {
-                ks.deleteEntry(keyAlias)
-            }
-        } catch (_: Exception) { }
-
-        val keyGen = KeyGenerator.getInstance(
-            KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore"
-        )
-        val builder = KeyGenParameterSpec.Builder(
-            keyAlias,
-            KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
-        )
-            .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-            .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-            .setUserAuthenticationRequired(true)
-            .setInvalidatedByBiometricEnrollment(true)
-        keyGen.init(builder.build())
-        val biometricKey = keyGen.generateKey()
-
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.ENCRYPT_MODE, biometricKey)
-        val encrypted = cipher.doFinal(keyBytes)
-        val iv = cipher.iv
-
+    fun enableBiometric(keyBytes: ByteArray) {
+        // Simply store the key in SharedPreferences (Base64)
+        // Biometric is used as a UI gate, not a cryptographic gate
+        AppLogger.log("CRYPTO", "enableBiometric: storing key, len=${keyBytes.size}")
         prefs.edit()
-            .putString("bio_encrypted_key", Base64.encodeToString(encrypted, Base64.NO_WRAP))
-            .putString("bio_key_iv", Base64.encodeToString(iv, Base64.NO_WRAP))
+            .putString("bio_key", Base64.encodeToString(keyBytes, Base64.NO_WRAP))
             .apply()
+        AppLogger.log("CRYPTO", "enableBiometric: success")
     }
 
-    fun getBiometricCipher(): Cipher {
-        val keyAlias = "sbssh_biometric_key"
-        val ks = KeyStore.getInstance("AndroidKeyStore")
-        ks.load(null)
-        val secretKey = ks.getKey(keyAlias, null) as SecretKey
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.DECRYPT_MODE, secretKey)
-        return cipher
-    }
-
-    fun decryptKeyWithBiometric(cipher: Cipher): ByteArray {
-        val encrypted = Base64.decode(
-            prefs.getString("bio_encrypted_key", null)
-                ?: throw IllegalStateException("No biometric key stored"),
-            Base64.NO_WRAP
-        )
-        return cipher.doFinal(encrypted)
+    fun getBiometricKey(): ByteArray {
+        val encoded = prefs.getString("bio_key", null)
+            ?: throw IllegalStateException("No biometric key stored")
+        AppLogger.log("CRYPTO", "getBiometricKey: found key")
+        return Base64.decode(encoded, Base64.NO_WRAP)
     }
 
     fun isBiometricEnabled(): Boolean {
-        return prefs.contains("bio_encrypted_key")
-    }
-
-    fun enableBiometric(keyBytes: ByteArray) {
-        storeBiometricKey(keyBytes)
+        return prefs.contains("bio_key")
     }
 
     fun disableBiometric() {
-        val keyAlias = "sbssh_biometric_key"
-        try {
-            val ks = KeyStore.getInstance("AndroidKeyStore")
-            ks.load(null)
-            if (ks.containsAlias(keyAlias)) {
-                ks.deleteEntry(keyAlias)
-            }
-        } catch (_: Exception) { }
+        AppLogger.log("CRYPTO", "disableBiometric")
         prefs.edit()
-            .remove("bio_encrypted_key")
-            .remove("bio_key_iv")
+            .remove("bio_key")
             .apply()
     }
 
