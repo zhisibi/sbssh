@@ -1,6 +1,5 @@
 package com.sbssh.ui.vpslist
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -27,13 +26,53 @@ fun VpsListScreen(
 ) {
     val viewModel: VpsListViewModel = viewModel(factory = VpsListViewModel.Factory())
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    var showSettingsMenu by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("My Servers") },
+                actions = {
+                    Box {
+                        IconButton(onClick = { showSettingsMenu = true }) {
+                            Icon(Icons.Default.Settings, contentDescription = "Settings")
+                        }
+                        DropdownMenu(
+                            expanded = showSettingsMenu,
+                            onDismissRequest = { showSettingsMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Language") },
+                                onClick = { showSettingsMenu = false },
+                                leadingIcon = { Icon(Icons.Default.Language, contentDescription = null) }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Font Size") },
+                                onClick = { showSettingsMenu = false },
+                                leadingIcon = { Icon(Icons.Default.FormatSize, contentDescription = null) }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Server Backup") },
+                                onClick = { showSettingsMenu = false },
+                                leadingIcon = { Icon(Icons.Default.Backup, contentDescription = null) }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Server Restore") },
+                                onClick = { showSettingsMenu = false },
+                                leadingIcon = { Icon(Icons.Default.Restore, contentDescription = null) }
+                            )
+                            Divider()
+                            DropdownMenuItem(
+                                text = { Text("About") },
+                                onClick = { showSettingsMenu = false },
+                                leadingIcon = { Icon(Icons.Default.Info, contentDescription = null) }
+                            )
+                        }
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             )
         },
@@ -45,23 +84,22 @@ fun VpsListScreen(
     ) { padding ->
         if (uiState.isLoading) {
             Box(
-                modifier = Modifier.fillMaxSize().padding(padding),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
                 contentAlignment = Alignment.Center
             ) {
                 SimpleLoadingText("Loading servers...")
             }
         } else if (uiState.vpsList.isEmpty()) {
             Box(
-                modifier = Modifier.fillMaxSize().padding(padding),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        Icons.Default.Dns,
-                        contentDescription = null,
-                        modifier = Modifier.size(64.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Text("🖥️", style = MaterialTheme.typography.displaySmall)
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         "No servers yet",
@@ -77,8 +115,10 @@ fun VpsListScreen(
             }
         } else {
             LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(padding),
-                contentPadding = PaddingValues(16.dp),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(uiState.vpsList, key = { it.id }) { vps ->
@@ -94,7 +134,6 @@ fun VpsListScreen(
         }
     }
 
-    // Delete confirmation dialog
     uiState.showDeleteDialog?.let { vpsId ->
         AlertDialog(
             onDismissRequest = { viewModel.dismissDelete() },
@@ -124,11 +163,14 @@ private fun VpsCard(
 ) {
     var showMenu by remember { mutableStateOf(false) }
 
-    Card(
-        modifier = Modifier.fillMaxWidth()
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
     ) {
         Column(
-            modifier = Modifier.padding(16.dp)
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -137,19 +179,22 @@ private fun VpsCard(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = vps.alias,
+                        text = "🖥️  ${vps.alias}",
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "${vps.username}@${vps.host}:${vps.port}",
+                        text = vps.username,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = if (vps.authType == "KEY") "Key Authentication" else "Password Authentication",
+                        text = if (vps.authType == "KEY") "SSH Key Authentication" else "Password Authentication",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
                 Box {
@@ -174,7 +219,7 @@ private fun VpsCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
