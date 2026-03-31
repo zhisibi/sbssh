@@ -3,6 +3,8 @@ package com.sbssh.ui.terminal
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.sbssh.data.crypto.FieldCryptoManager
+import com.sbssh.data.crypto.SessionKeyHolder
 import com.sbssh.data.db.AppDatabase
 import com.sbssh.data.db.VpsEntity
 import kotlinx.coroutines.Dispatchers
@@ -87,16 +89,39 @@ class TerminalViewModel(private val vpsId: Long) : ViewModel() {
         }
 
         viewModelScope.launch {
-            val success = manager.connect(v)
-            val tabs = _uiState.value.tabs.toMutableList()
-            val idx = tabs.indexOfFirst { it.id == tabId }
-            if (idx >= 0) {
-                tabs[idx] = tabs[idx].copy(
-                    isConnected = success,
-                    isConnecting = false,
-                    error = if (!success) "Connection failed" else null
+            try {
+                val key = SessionKeyHolder.get()
+                val crypto = FieldCryptoManager()
+                val success = manager.connect(
+                    host = v.host,
+                    port = v.port,
+                    username = v.username,
+                    authType = v.authType,
+                    password = crypto.decrypt(v.encryptedPassword, key),
+                    keyContent = crypto.decrypt(v.encryptedKeyContent, key),
+                    keyPassphrase = crypto.decrypt(v.encryptedKeyPassphrase, key)
                 )
-                _uiState.value = _uiState.value.copy(tabs = tabs)
+                val tabs = _uiState.value.tabs.toMutableList()
+                val idx = tabs.indexOfFirst { it.id == tabId }
+                if (idx >= 0) {
+                    tabs[idx] = tabs[idx].copy(
+                        isConnected = success,
+                        isConnecting = false,
+                        error = if (!success) "Connection failed" else null
+                    )
+                    _uiState.value = _uiState.value.copy(tabs = tabs)
+                }
+            } catch (e: Exception) {
+                val tabs = _uiState.value.tabs.toMutableList()
+                val idx = tabs.indexOfFirst { it.id == tabId }
+                if (idx >= 0) {
+                    tabs[idx] = tabs[idx].copy(
+                        isConnected = false,
+                        isConnecting = false,
+                        error = e.message ?: "Connection failed"
+                    )
+                    _uiState.value = _uiState.value.copy(tabs = tabs)
+                }
             }
         }
     }

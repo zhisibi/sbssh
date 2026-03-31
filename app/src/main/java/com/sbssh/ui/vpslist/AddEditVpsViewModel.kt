@@ -1,12 +1,10 @@
 package com.sbssh.ui.vpslist
 
-import android.app.Activity
-import android.content.Intent
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.sbssh.data.crypto.FieldCryptoManager
+import com.sbssh.data.crypto.SessionKeyHolder
 import com.sbssh.data.db.AppDatabase
 import com.sbssh.data.db.VpsEntity
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,6 +28,7 @@ data class AddEditVpsUiState(
 
 class AddEditVpsViewModel(private val vpsId: Long? = null) : ViewModel() {
 
+    private val crypto = FieldCryptoManager()
     private var dao = runCatching { AppDatabase.getInstance().vpsDao() }.getOrNull()
     private val _uiState = MutableStateFlow(AddEditVpsUiState())
     val uiState: StateFlow<AddEditVpsUiState> = _uiState.asStateFlow()
@@ -39,18 +38,23 @@ class AddEditVpsViewModel(private val vpsId: Long? = null) : ViewModel() {
             _uiState.value = _uiState.value.copy(error = "Database not initialized")
         } else if (vpsId != null) {
             viewModelScope.launch {
-                val vps = dao!!.getVpsById(vpsId)
-                if (vps != null) {
-                    _uiState.value = AddEditVpsUiState(
-                        alias = vps.alias,
-                        host = vps.host,
-                        port = vps.port.toString(),
-                        username = vps.username,
-                        authType = vps.authType,
-                        password = vps.password ?: "",
-                        keyContent = vps.keyContent ?: "",
-                        keyPassphrase = vps.keyPassphrase ?: ""
-                    )
+                try {
+                    val vps = dao!!.getVpsById(vpsId)
+                    if (vps != null) {
+                        val key = SessionKeyHolder.get()
+                        _uiState.value = AddEditVpsUiState(
+                            alias = vps.alias,
+                            host = vps.host,
+                            port = vps.port.toString(),
+                            username = vps.username,
+                            authType = vps.authType,
+                            password = crypto.decrypt(vps.encryptedPassword, key) ?: "",
+                            keyContent = crypto.decrypt(vps.encryptedKeyContent, key) ?: "",
+                            keyPassphrase = crypto.decrypt(vps.encryptedKeyPassphrase, key) ?: ""
+                        )
+                    }
+                } catch (e: Exception) {
+                    _uiState.value = _uiState.value.copy(error = e.message ?: "Failed to load server")
                 }
             }
         }
@@ -92,6 +96,7 @@ class AddEditVpsViewModel(private val vpsId: Long? = null) : ViewModel() {
         _uiState.value = state.copy(isLoading = true, error = null)
         viewModelScope.launch {
             try {
+                val key = SessionKeyHolder.get()
                 val now = System.currentTimeMillis()
                 if (vpsId == null) {
                     dao?.insertVps(
@@ -101,9 +106,9 @@ class AddEditVpsViewModel(private val vpsId: Long? = null) : ViewModel() {
                             port = portInt,
                             username = state.username.trim(),
                             authType = state.authType,
-                            password = if (state.authType == "PASSWORD") state.password else null,
-                            keyContent = if (state.authType == "KEY") state.keyContent else null,
-                            keyPassphrase = if (state.authType == "KEY" && state.keyPassphrase.isNotBlank()) state.keyPassphrase else null,
+                            encryptedPassword = if (state.authType == "PASSWORD") crypto.encrypt(state.password, key) else null,
+                            encryptedKeyContent = if (state.authType == "KEY") crypto.encrypt(state.keyContent, key) else null,
+                            encryptedKeyPassphrase = if (state.authType == "KEY" && state.keyPassphrase.isNotBlank()) crypto.encrypt(state.keyPassphrase, key) else null,
                             createdAt = now,
                             updatedAt = now
                         )
@@ -117,9 +122,9 @@ class AddEditVpsViewModel(private val vpsId: Long? = null) : ViewModel() {
                             port = portInt,
                             username = state.username.trim(),
                             authType = state.authType,
-                            password = if (state.authType == "PASSWORD") state.password else null,
-                            keyContent = if (state.authType == "KEY") state.keyContent else null,
-                            keyPassphrase = if (state.authType == "KEY" && state.keyPassphrase.isNotBlank()) state.keyPassphrase else null,
+                            encryptedPassword = if (state.authType == "PASSWORD") crypto.encrypt(state.password, key) else null,
+                            encryptedKeyContent = if (state.authType == "KEY") crypto.encrypt(state.keyContent, key) else null,
+                            encryptedKeyPassphrase = if (state.authType == "KEY" && state.keyPassphrase.isNotBlank()) crypto.encrypt(state.keyPassphrase, key) else null,
                             updatedAt = now
                         )
                     )

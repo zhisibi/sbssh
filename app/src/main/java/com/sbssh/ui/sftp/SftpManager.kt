@@ -31,21 +31,29 @@ class SftpManager {
     var isConnected = false
         private set
 
-    suspend fun connect(vps: VpsEntity): Boolean = withContext(Dispatchers.IO) {
+    suspend fun connect(
+        host: String,
+        port: Int,
+        username: String,
+        authType: String,
+        password: String?,
+        keyContent: String?,
+        keyPassphrase: String?
+    ): Boolean = withContext(Dispatchers.IO) {
         try {
             jsch.removeAllIdentity()
-            if (vps.authType == "KEY" && vps.keyContent != null) {
+            if (authType == "KEY" && keyContent != null) {
                 jsch.addIdentity(
-                    "sftp_${vps.id}",
-                    vps.keyContent.toByteArray(),
+                    "sftp_key_${host}_${port}",
+                    keyContent.toByteArray(),
                     null,
-                    vps.keyPassphrase?.toByteArray()
+                    keyPassphrase?.toByteArray()
                 )
             }
 
-            session = jsch.getSession(vps.username, vps.host, vps.port)
-            if (vps.authType == "PASSWORD" && vps.password != null) {
-                session?.setPassword(vps.password)
+            session = jsch.getSession(username, host, port)
+            if (authType == "PASSWORD" && password != null) {
+                session?.setPassword(password)
             }
             val config = Properties()
             config["StrictHostKeyChecking"] = "no"

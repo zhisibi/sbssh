@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.sbssh.SbsshApp
 import com.sbssh.data.crypto.CryptoManager
+import com.sbssh.data.crypto.SessionKeyHolder
 import com.sbssh.data.db.AppDatabase
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -47,21 +48,17 @@ class MasterPasswordViewModel(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             try {
-                // Generate salt (do NOT store yet — wait until db init succeeds)
                 val salt = cryptoManager.generateSalt()
                 val keyBytes = cryptoManager.deriveKey(password, salt)
 
-                // Try to init database first
-                try {
-                    AppDatabase.close()
-                    initDatabase(keyBytes)
-                } catch (e: Exception) {
-                    // DB init failed — clear any partial state and report error
-                    cryptoManager.clearMasterPasswordState()
-                    throw e
-                }
+                // Store session key for field-level encryption
+                SessionKeyHolder.set(keyBytes)
 
-                // DB init succeeded — NOW persist salt + password verification hash
+                // Init plain Room database
+                AppDatabase.close()
+                AppDatabase.getInstance(SbsshApp.instance)
+
+                // Now persist salt + password verification hash
                 cryptoManager.saveSalt(salt)
                 cryptoManager.setPasswordVerification(password, salt)
 
@@ -70,7 +67,7 @@ class MasterPasswordViewModel(
                     isAuthenticated = true
                 )
             } catch (e: Exception) {
-                AppDatabase.close()
+                SessionKeyHolder.clear()
                 cryptoManager.clearMasterPasswordState()
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
@@ -84,8 +81,6 @@ class MasterPasswordViewModel(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             try {
-                // Check for corrupted state: salt exists but no password hash
-                // (happens when previous Create failed before storing hash)
                 if (!cryptoManager.isMasterPasswordSet()) {
                     cryptoManager.clearMasterPasswordState()
                     _uiState.value = _uiState.value.copy(
@@ -97,10 +92,16 @@ class MasterPasswordViewModel(
                 }
 
                 if (cryptoManager.verifyMasterPassword(password)) {
-                    AppDatabase.close()
                     val salt = cryptoManager.getSalt()
                     val keyBytes = cryptoManager.deriveKey(password, salt)
-                    initDatabase(keyBytes)
+
+                    // Store session key for field-level decryption
+                    SessionKeyHolder.set(keyBytes)
+
+                    // Init plain Room database
+                    AppDatabase.close()
+                    AppDatabase.getInstance(SbsshApp.instance)
+
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         isAuthenticated = true
@@ -112,7 +113,7 @@ class MasterPasswordViewModel(
                     )
                 }
             } catch (e: Exception) {
-                AppDatabase.close()
+                SessionKeyHolder.clear()
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     error = e.message ?: "Failed to unlock"
@@ -125,24 +126,22 @@ class MasterPasswordViewModel(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             try {
+                SessionKeyHolder.set(decryptedKey)
                 AppDatabase.close()
-                initDatabase(decryptedKey)
+                AppDatabase.getInstance(SbsshApp.instance)
+
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     isAuthenticated = true
                 )
             } catch (e: Exception) {
-                AppDatabase.close()
+                SessionKeyHolder.clear()
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     error = e.message ?: "Biometric unlock failed"
                 )
             }
         }
-    }
-
-    private fun initDatabase(passphrase: ByteArray) {
-        AppDatabase.getInstance(SbsshApp.instance, passphrase)
     }
 
     fun enableBiometric(password: String) {

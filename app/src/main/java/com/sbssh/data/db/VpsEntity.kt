@@ -12,9 +12,9 @@ data class VpsEntity(
     val port: Int = 22,
     val username: String,
     val authType: String, // "PASSWORD" or "KEY"
-    val password: String? = null,
-    val keyContent: String? = null,
-    val keyPassphrase: String? = null,
+    val encryptedPassword: String? = null,
+    val encryptedKeyContent: String? = null,
+    val encryptedKeyPassphrase: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )

@@ -5,6 +5,8 @@ import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.sbssh.data.crypto.FieldCryptoManager
+import com.sbssh.data.crypto.SessionKeyHolder
 import com.sbssh.data.db.AppDatabase
 import com.sbssh.data.db.VpsEntity
 import kotlinx.coroutines.Dispatchers
@@ -50,15 +52,32 @@ class SftpViewModel(private val vpsId: Long, private val context: Context) : Vie
             viewModelScope.launch {
                 vps = dao!!.getVpsById(vpsId)
                 vps?.let { v ->
-                    val success = manager.connect(v)
-                    if (success) {
-                        val pwd = manager.getCurrentPath()
-                        _uiState.value = _uiState.value.copy(isConnected = true, isConnecting = false, currentPath = pwd)
-                        loadDirectory(pwd)
-                    } else {
+                    try {
+                        val key = SessionKeyHolder.get()
+                        val crypto = FieldCryptoManager()
+                        val success = manager.connect(
+                            host = v.host,
+                            port = v.port,
+                            username = v.username,
+                            authType = v.authType,
+                            password = crypto.decrypt(v.encryptedPassword, key),
+                            keyContent = crypto.decrypt(v.encryptedKeyContent, key),
+                            keyPassphrase = crypto.decrypt(v.encryptedKeyPassphrase, key)
+                        )
+                        if (success) {
+                            val pwd = manager.getCurrentPath()
+                            _uiState.value = _uiState.value.copy(isConnected = true, isConnecting = false, currentPath = pwd)
+                            loadDirectory(pwd)
+                        } else {
+                            _uiState.value = _uiState.value.copy(
+                                isConnecting = false,
+                                connectionError = "Failed to connect to ${v.host}"
+                            )
+                        }
+                    } catch (e: Exception) {
                         _uiState.value = _uiState.value.copy(
                             isConnecting = false,
-                            connectionError = "Failed to connect to ${v.host}"
+                            connectionError = e.message ?: "Connection failed"
                         )
                     }
                 }

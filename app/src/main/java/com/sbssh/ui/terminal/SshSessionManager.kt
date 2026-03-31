@@ -3,7 +3,6 @@ package com.sbssh.ui.terminal
 import com.jcraft.jsch.ChannelShell
 import com.jcraft.jsch.JSch
 import com.jcraft.jsch.Session
-import com.sbssh.data.db.VpsEntity
 import kotlinx.coroutines.*
 import java.io.InputStream
 import java.io.OutputStream
@@ -24,23 +23,31 @@ class SshSessionManager {
 
     private var readJob: Job? = null
 
-    suspend fun connect(vps: VpsEntity): Boolean = withContext(Dispatchers.IO) {
+    suspend fun connect(
+        host: String,
+        port: Int,
+        username: String,
+        authType: String,
+        password: String?,
+        keyContent: String?,
+        keyPassphrase: String?
+    ): Boolean = withContext(Dispatchers.IO) {
         try {
             jsch.removeAllIdentity()
 
-            if (vps.authType == "KEY" && vps.keyContent != null) {
-                val identityName = "sbssh_${vps.id}"
+            if (authType == "KEY" && keyContent != null) {
+                val identityName = "sbssh_key_${host}_${port}"
                 jsch.addIdentity(
                     identityName,
-                    vps.keyContent.toByteArray(),
+                    keyContent.toByteArray(),
                     null,
-                    vps.keyPassphrase?.toByteArray()
+                    keyPassphrase?.toByteArray()
                 )
             }
 
-            session = jsch.getSession(vps.username, vps.host, vps.port)
-            if (vps.authType == "PASSWORD" && vps.password != null) {
-                session?.setPassword(vps.password)
+            session = jsch.getSession(username, host, port)
+            if (authType == "PASSWORD" && password != null) {
+                session?.setPassword(password)
             }
 
             val config = Properties()
