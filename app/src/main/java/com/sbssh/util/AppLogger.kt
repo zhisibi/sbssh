@@ -12,6 +12,12 @@ object AppLogger {
 
     fun init(context: Context) {
         logFile = File(context.filesDir, "sbssh_debug.log")
+        try {
+            if (!logFile.exists()) {
+                logFile.parentFile?.mkdirs()
+                logFile.writeText("=== SbSSH Debug Log ===\n")
+            }
+        } catch (_: Exception) { }
     }
 
     fun log(tag: String, message: String, throwable: Throwable? = null) {

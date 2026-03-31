@@ -6,6 +6,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -21,7 +22,10 @@ fun LogScreen(onBack: () -> Unit) {
     var logText by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
-        logText = AppLogger.getLog()
+        while (true) {
+            logText = AppLogger.getLog()
+            kotlinx.coroutines.delay(1000)
+        }
     }
 
     Scaffold(
@@ -34,6 +38,11 @@ fun LogScreen(onBack: () -> Unit) {
                     }
                 },
                 actions = {
+                    IconButton(onClick = {
+                        logText = AppLogger.getLog()
+                    }) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Refresh logs")
+                    }
                     IconButton(onClick = {
                         AppLogger.clear()
                         logText = "Logs cleared"

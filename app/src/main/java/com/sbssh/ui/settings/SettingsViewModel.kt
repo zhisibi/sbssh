@@ -219,13 +219,22 @@ class SettingsViewModel(
 
                 // Step 5: Copy temp file to user-selected URI
                 val bytes = tempFile.readBytes()
-                context.contentResolver.openOutputStream(uri)?.use { output ->
-                    output.write(bytes)
-                    output.flush()
-                    AppLogger.log("BACKUP", "Copied ${bytes.size} bytes to URI")
-                } ?: run {
-                    AppLogger.log("BACKUP", "openOutputStream returned null!")
+                if (bytes.isEmpty()) {
+                    throw IllegalStateException("Backup bytes empty")
                 }
+                val output = context.contentResolver.openOutputStream(uri)
+                    ?: throw IllegalStateException("openOutputStream returned null")
+                output.use {
+                    it.write(bytes)
+                    it.flush()
+                }
+                AppLogger.log("BACKUP", "Copied ${bytes.size} bytes to URI")
+
+                // Verify by reading back size (best effort)
+                val readBackSize = try {
+                    context.contentResolver.openInputStream(uri)?.use { it.readBytes().size } ?: -1
+                } catch (_: Exception) { -1 }
+                AppLogger.log("BACKUP", "Read back size=$readBackSize")
 
                 // Step 6: Clean up temp file
                 tempFile.delete()
