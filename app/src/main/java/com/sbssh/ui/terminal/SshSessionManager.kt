@@ -3,6 +3,7 @@ package com.sbssh.ui.terminal
 import com.jcraft.jsch.ChannelShell
 import com.jcraft.jsch.JSch
 import com.jcraft.jsch.Session
+import com.sbssh.util.AppLogger
 import kotlinx.coroutines.*
 import java.io.InputStream
 import java.io.OutputStream
@@ -107,9 +108,15 @@ class SshSessionManager {
 
     fun sendCommand(command: String) {
         try {
+            if (outputStream == null) {
+                AppLogger.log("SSH", "sendCommand: outputStream is null")
+                return
+            }
             outputStream?.write(command.toByteArray())
             outputStream?.flush()
-        } catch (_: Exception) { }
+        } catch (e: Exception) {
+            AppLogger.log("SSH", "sendCommand failed", e)
+        }
     }
 
     fun resize(cols: Int, rows: Int) {

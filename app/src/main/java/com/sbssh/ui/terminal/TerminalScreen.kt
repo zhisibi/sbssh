@@ -21,13 +21,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.draw.alpha
+import kotlinx.coroutines.delay
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.sbssh.ui.theme.TerminalBg
@@ -49,12 +50,15 @@ fun TerminalScreen(
     var ctrlMode by remember { mutableStateOf(false) }
     val keyboardController = LocalSoftwareKeyboardController.current
 
-    LaunchedEffect(Unit) {
-        focusRequester.requestFocus()
-        keyboardController?.show()
-    }
-
     val activeTab = uiState.tabs.find { it.id == uiState.activeTabId }
+
+    LaunchedEffect(activeTab?.isConnected) {
+        if (activeTab?.isConnected == true) {
+            delay(200)
+            focusRequester.requestFocus()
+            keyboardController?.show()
+        }
+    }
 
     val keyButtons = listOf(
         "TAB" to "\t",
@@ -106,7 +110,7 @@ fun TerminalScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(40.dp)
-                        .background(Color.Transparent)
+                        .background(TerminalBg)
                         .padding(horizontal = 6.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
@@ -121,7 +125,8 @@ fun TerminalScreen(
                                 }
                             },
                             label = { Text(if (label == "CTRL" && ctrlMode) "CTRL*" else label, style = MaterialTheme.typography.labelSmall) },
-                            enabled = activeTab?.isConnected == true
+                            enabled = activeTab?.isConnected == true,
+                            modifier = Modifier.height(32.dp)
                         )
                     }
                 }
@@ -235,7 +240,8 @@ fun TerminalScreen(
 
                     modifier = Modifier
                         .size(1.dp)
-                        .focusRequester(focusRequester),
+                        .focusRequester(focusRequester)
+                        .alpha(0f),
                     textStyle = TextStyle(color = Color.Transparent),
                     cursorBrush = SolidColor(Color.Transparent)
                 )
