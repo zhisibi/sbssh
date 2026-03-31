@@ -44,9 +44,22 @@ fun TerminalScreen(
     )
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
+    val focusRequester = remember { FocusRequester() }
+    var inputBuffer by remember { mutableStateOf("") }
+    var ctrlMode by remember { mutableStateOf(false) }
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+        keyboardController?.show()
+    }
+
+    val activeTab = uiState.tabs.find { it.id == uiState.activeTabId }
+
     val keyButtons = listOf(
-        "ESC" to "\u001B",
         "TAB" to "\t",
+        "CTRL" to "",
+        "ESC" to "\u001B",
         "CTRL+A" to "\u0001",
         "CTRL+E" to "\u0005",
         "CTRL+C" to "\u0003",
@@ -65,17 +78,11 @@ fun TerminalScreen(
         "ENTER" to "\r"
     )
 
-    val focusRequester = remember { FocusRequester() }
-    var inputBuffer by remember { mutableStateOf("") }
-    val keyboardController = LocalSoftwareKeyboardController.current
-    val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
-
     Scaffold(
         topBar = {
-            if (!imeVisible) {
+            Column {
                 TopAppBar(
                     title = {
-                        val activeTab = uiState.tabs.find { it.id == uiState.activeTabId }
                         Text(activeTab?.vpsAlias ?: "Terminal", maxLines = 1)
                     },
                     navigationIcon = {
@@ -88,11 +95,36 @@ fun TerminalScreen(
                             Icon(Icons.Default.Add, contentDescription = "New Tab")
                         }
                     },
-                    modifier = Modifier.fillMaxWidth(0.33f),
+                    modifier = Modifier.height(40.dp),
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.primaryContainer
                     )
                 )
+
+                // Shortcut bar fixed under top bar
+                LazyRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(40.dp)
+                        .background(Color.Transparent)
+                        .padding(horizontal = 6.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    items(keyButtons) { (label, code) ->
+                        AssistChip(
+                            onClick = {
+                                if (label == "CTRL") {
+                                    ctrlMode = !ctrlMode
+                                } else {
+                                    viewModel.sendRaw(code)
+                                    ctrlMode = false
+                                }
+                            },
+                            label = { Text(if (label == "CTRL" && ctrlMode) "CTRL*" else label, style = MaterialTheme.typography.labelSmall) },
+                            enabled = activeTab?.isConnected == true
+                        )
+                    }
+                }
             }
         }
     ) { padding ->
@@ -138,8 +170,6 @@ fun TerminalScreen(
             }
 
             // Terminal output area
-            val activeTab = uiState.tabs.find { it.id == uiState.activeTabId }
-
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -187,7 +217,14 @@ fun TerminalScreen(
                         val old = inputBuffer
                         if (new.length > old.length) {
                             val add = new.substring(old.length)
-                            viewModel.sendRaw(add)
+                            if (ctrlMode && add.isNotEmpty()) {
+                                val ch = add.last()
+                                val code = if (ch in 'a'..'z') (ch.code - 96) else if (ch in 'A'..'Z') (ch.code - 64) else ch.code
+                                viewModel.sendRaw(code.toChar().toString())
+                                ctrlMode = false
+                            } else {
+                                viewModel.sendRaw(add)
+                            }
                         } else if (new.length < old.length) {
                             val count = old.length - new.length
                             if (count > 0) viewModel.sendRaw("\b".repeat(count))
@@ -202,24 +239,6 @@ fun TerminalScreen(
                     textStyle = TextStyle(color = Color.Transparent),
                     cursorBrush = SolidColor(Color.Transparent)
                 )
-            }
-
-            // Shortcut bar (single row), floats above IME
-            LazyRow(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surface)
-                    .imePadding()
-                    .padding(horizontal = 6.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                items(keyButtons) { (label, code) ->
-                    AssistChip(
-                        onClick = { viewModel.sendRaw(code) },
-                        label = { Text(label, style = MaterialTheme.typography.labelSmall) },
-                        enabled = activeTab?.isConnected == true
-                    )
-                }
             }
         }
     }
