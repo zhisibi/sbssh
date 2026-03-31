@@ -108,4 +108,6 @@ dependencies {
     // Debug
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
+    debugImplementation("cat.ereza:customactivityoncrash:2.4.0")
+    debugImplementation("com.squareup.leakcanary:leakcanary-android:2.14")
 }

@@ -19,6 +19,16 @@
         tools:targetApi="34">
 
         <activity
+            android:name=".CrashActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Sbssh">
+            <intent-filter>
+                <action android:name="cat.ereza.customactivityoncrash.RESTART" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <activity
             android:name=".MainActivity"
             android:exported="true"
             android:theme="@style/Theme.Sbssh">
