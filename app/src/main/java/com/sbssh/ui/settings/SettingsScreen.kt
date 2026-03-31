@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.sbssh.R
+import com.sbssh.BuildConfig
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -32,10 +33,7 @@ fun SettingsScreen(onBack: () -> Unit, onViewLog: () -> Unit = {}) {
     val viewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.Factory(context, activity))
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    val backupLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("application/octet-stream")
-    ) { uri -> uri?.let { viewModel.saveBackupToUri(it) } }
-
+    // Backup: save directly to Downloads (no SAF picker)
     val restoreLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri -> uri?.let { viewModel.restoreServers(it) } }
@@ -82,7 +80,7 @@ fun SettingsScreen(onBack: () -> Unit, onViewLog: () -> Unit = {}) {
 
             SettingsCard(Icons.Default.Backup, stringResource(R.string.server_backup),
                 stringResource(R.string.export_encrypted),
-                onClick = { backupLauncher.launch(viewModel.getBackupFileName()) })
+                onClick = { viewModel.saveBackupToDownloads() })
 
             SettingsCard(Icons.Default.Restore, stringResource(R.string.server_restore),
                 stringResource(R.string.restore_from_backup),
@@ -99,7 +97,7 @@ fun SettingsScreen(onBack: () -> Unit, onViewLog: () -> Unit = {}) {
             SettingsCard(Icons.Default.BugReport, "Debug Log", "View app logs",
                 onClick = { onViewLog() })
 
-            SettingsCard(Icons.Default.Info, stringResource(R.string.about), "SbSSH v1.0",
+            SettingsCard(Icons.Default.Info, stringResource(R.string.about), "SbSSH ${BuildConfig.VERSION_NAME}",
                 onClick = { viewModel.showAbout() })
         }
     }
@@ -208,7 +206,7 @@ fun SettingsScreen(onBack: () -> Unit, onViewLog: () -> Unit = {}) {
             title = { Text(stringResource(R.string.about_title)) },
             text = {
                 Column {
-                    Text("SbSSH v1.0", fontWeight = FontWeight.Bold); Spacer(Modifier.height(8.dp))
+                    Text("SbSSH ${BuildConfig.VERSION_NAME}", fontWeight = FontWeight.Bold); Spacer(Modifier.height(8.dp))
                     Text(stringResource(R.string.about_desc)); Spacer(Modifier.height(8.dp))
                     Text(stringResource(R.string.about_features), fontWeight = FontWeight.SemiBold)
                     Text(stringResource(R.string.about_ssh)); Text(stringResource(R.string.about_sftp))

@@ -1,7 +1,10 @@
 package com.sbssh.ui.settings
 
+import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
+import android.os.Environment
+import android.provider.MediaStore
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.ViewModel
@@ -157,88 +160,99 @@ class SettingsViewModel(
         _uiState.value = _uiState.value.copy(fontSize = size, showFontSizeDialog = false, success = "Font size updated")
     }
 
-    // ========== Backup — prepare data and write to URI in one step ==========
-    fun saveBackupToUri(uri: Uri) {
-        AppLogger.log("BACKUP", "saveBackupToUri: uri=$uri")
-        if (dao == null) {
-            AppLogger.log("BACKUP", "DAO is null")
-            _uiState.value = _uiState.value.copy(error = "Database not initialized")
-            return
+    // ========== Backup helpers ==========
+    private suspend fun buildBackupEnvelope(): String {
+        if (dao == null) throw IllegalStateException("Database not initialized")
+        // Step 1: Read VPS data
+        val vpsList = try { dao!!.getAllVpsAsList() } catch (e: Exception) {
+            AppLogger.log("BACKUP", "getAllVpsAsList failed", e); throw e }
+        AppLogger.log("BACKUP", "VPS count: ${vpsList.size}")
+        if (vpsList.isEmpty()) throw IllegalStateException("No servers to backup")
+
+        // Step 2: Serialize
+        val backupList = vpsList.map { v ->
+            BackupItem(
+                alias = v.alias,
+                host = v.host,
+                port = v.port,
+                username = v.username,
+                authType = v.authType,
+                encryptedPassword = v.encryptedPassword,
+                encryptedKeyContent = v.encryptedKeyContent,
+                encryptedKeyPassphrase = v.encryptedKeyPassphrase,
+                createdAt = v.createdAt,
+                updatedAt = v.updatedAt
+            )
         }
+        val json = gson.toJson(backupList)
+        AppLogger.log("BACKUP", "JSON size: ${json.length}")
+
+        // Step 3: Encrypt (if session key available) and wrap in envelope
+        val (encrypted, payload) = try {
+            if (SessionKeyHolder.isSet()) {
+                val key = SessionKeyHolder.get()
+                AppLogger.log("BACKUP", "Session key set, encrypting payload...")
+                true to (fieldCrypto.encrypt(json, key) ?: json)
+            } else {
+                AppLogger.log("BACKUP", "Session key NOT set, writing plain payload")
+                false to json
+            }
+        } catch (e: Exception) {
+            AppLogger.log("BACKUP", "Encryption failed, writing plain", e)
+            false to json
+        }
+        val envelope = BackupEnvelope(encrypted = encrypted, payload = payload)
+        val dataToWrite = gson.toJson(envelope)
+        AppLogger.log("BACKUP", "Envelope size: ${dataToWrite.length}, encrypted=$encrypted")
+        return dataToWrite
+    }
+
+    // ========== Backup — save directly to Downloads via MediaStore ==========
+    fun saveBackupToDownloads() {
+        AppLogger.log("BACKUP", "saveBackupToDownloads")
         viewModelScope.launch {
             try {
-                // Step 1: Read VPS data
-                val vpsList = try { dao!!.getAllVpsAsList() } catch (e: Exception) {
-                    AppLogger.log("BACKUP", "getAllVpsAsList failed", e); throw e }
-                AppLogger.log("BACKUP", "VPS count: ${vpsList.size}")
-                if (vpsList.isEmpty()) {
-                    _uiState.value = _uiState.value.copy(error = "No servers to backup")
-                    return@launch
-                }
+                val dataToWrite = buildBackupEnvelope()
+                val bytes = dataToWrite.toByteArray(Charsets.UTF_8)
+                if (bytes.isEmpty()) throw IllegalStateException("Backup bytes empty")
 
-                // Step 2: Serialize
-                val backupList = vpsList.map { v ->
-                    BackupItem(
-                        alias = v.alias,
-                        host = v.host,
-                        port = v.port,
-                        username = v.username,
-                        authType = v.authType,
-                        encryptedPassword = v.encryptedPassword,
-                        encryptedKeyContent = v.encryptedKeyContent,
-                        encryptedKeyPassphrase = v.encryptedKeyPassphrase,
-                        createdAt = v.createdAt,
-                        updatedAt = v.updatedAt
-                    )
+                val fileName = getBackupFileName()
+                val values = ContentValues().apply {
+                    put(MediaStore.Downloads.DISPLAY_NAME, fileName)
+                    put(MediaStore.Downloads.MIME_TYPE, "application/octet-stream")
+                    put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
                 }
-                val json = gson.toJson(backupList)
-                AppLogger.log("BACKUP", "JSON size: ${json.length}")
+                val resolver = context.contentResolver
+                val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                    ?: throw IllegalStateException("Failed to create download file")
 
-                // Step 3: Encrypt (if session key available) and wrap in envelope
-                val (encrypted, payload) = try {
-                    if (SessionKeyHolder.isSet()) {
-                        val key = SessionKeyHolder.get()
-                        AppLogger.log("BACKUP", "Session key set, encrypting payload...")
-                        true to (fieldCrypto.encrypt(json, key) ?: json)
-                    } else {
-                        AppLogger.log("BACKUP", "Session key NOT set, writing plain payload")
-                        false to json
-                    }
-                } catch (e: Exception) {
-                    AppLogger.log("BACKUP", "Encryption failed, writing plain", e)
-                    false to json
-                }
-                val envelope = BackupEnvelope(encrypted = encrypted, payload = payload)
-                val dataToWrite = gson.toJson(envelope)
-                AppLogger.log("BACKUP", "Envelope size: ${dataToWrite.length}, encrypted=$encrypted")
+                resolver.openOutputStream(uri)?.use { it.write(bytes); it.flush() }
+                    ?: throw IllegalStateException("openOutputStream returned null")
 
-                // Step 4: Write to temp file first (to verify data is correct)
+                AppLogger.log("BACKUP", "Saved to Downloads: uri=$uri, bytes=${bytes.size}")
+                _uiState.value = _uiState.value.copy(success = "Backup saved to Downloads (${bytes.size} bytes)")
+            } catch (e: Exception) {
+                AppLogger.log("BACKUP", "Backup FAILED", e)
+                _uiState.value = _uiState.value.copy(error = "Backup failed: ${e.javaClass.simpleName}: ${e.message}")
+            }
+        }
+    }
+
+    // ========== Backup — legacy (SAF) ==========
+    fun saveBackupToUri(uri: Uri) {
+        AppLogger.log("BACKUP", "saveBackupToUri: uri=$uri")
+        viewModelScope.launch {
+            try {
+                val dataToWrite = buildBackupEnvelope()
                 val tempFile = java.io.File(context.cacheDir, "sbssh_backup_temp.enc")
                 tempFile.writeText(dataToWrite, Charsets.UTF_8)
-                AppLogger.log("BACKUP", "Wrote ${tempFile.length()} bytes to temp file")
-
-                // Step 5: Copy temp file to user-selected URI
                 val bytes = tempFile.readBytes()
-                if (bytes.isEmpty()) {
-                    throw IllegalStateException("Backup bytes empty")
-                }
+                if (bytes.isEmpty()) throw IllegalStateException("Backup bytes empty")
                 val output = context.contentResolver.openOutputStream(uri)
                     ?: throw IllegalStateException("openOutputStream returned null")
-                output.use {
-                    it.write(bytes)
-                    it.flush()
-                }
-                AppLogger.log("BACKUP", "Copied ${bytes.size} bytes to URI")
-
-                // Verify by reading back size (best effort)
-                val readBackSize = try {
-                    context.contentResolver.openInputStream(uri)?.use { it.readBytes().size } ?: -1
-                } catch (_: Exception) { -1 }
-                AppLogger.log("BACKUP", "Read back size=$readBackSize")
-
-                // Step 6: Clean up temp file
+                output.use { it.write(bytes); it.flush() }
                 tempFile.delete()
-
+                AppLogger.log("BACKUP", "Copied ${bytes.size} bytes to URI")
                 _uiState.value = _uiState.value.copy(success = "Backup saved (${bytes.size} bytes)")
             } catch (e: Exception) {
                 AppLogger.log("BACKUP", "Backup FAILED", e)
