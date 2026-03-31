@@ -26,7 +26,7 @@ import com.sbssh.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(onBack: () -> Unit) {
+fun SettingsScreen(onBack: () -> Unit, onViewLog: () -> Unit = {}) {
     val context = LocalContext.current
     val activity = context as? androidx.appcompat.app.AppCompatActivity
     val viewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.Factory(context, activity))
@@ -95,6 +95,9 @@ fun SettingsScreen(onBack: () -> Unit) {
             SettingsCard(Icons.Default.CloudSync, stringResource(R.string.cloud_sync),
                 if (uiState.cloudSyncEnabled) stringResource(R.string.cloud_sync_enabled) else stringResource(R.string.cloud_sync_not_enabled),
                 onClick = { viewModel.showCloudSyncDialog() })
+
+            SettingsCard(Icons.Default.BugReport, "Debug Log", "View app logs",
+                onClick = { onViewLog() })
 
             SettingsCard(Icons.Default.Info, stringResource(R.string.about), "SbSSH v1.0",
                 onClick = { viewModel.showAbout() })

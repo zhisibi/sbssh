@@ -14,6 +14,7 @@ import com.sbssh.data.crypto.FieldCryptoManager
 import com.sbssh.data.crypto.SessionKeyHolder
 import com.sbssh.data.db.AppDatabase
 import com.sbssh.data.db.VpsEntity
+import com.sbssh.util.AppLogger
 import com.sbssh.util.BiometricHelper
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -85,6 +86,7 @@ class SettingsViewModel(
     }
 
     fun toggleBiometric(password: String) {
+        AppLogger.log("BIO", "toggleBiometric called, current=${_uiState.value.biometricEnabled}")
         val current = _uiState.value.biometricEnabled
         if (current) {
             cryptoManager.disableBiometric()
@@ -92,20 +94,31 @@ class SettingsViewModel(
             return
         }
         if (!cryptoManager.verifyMasterPassword(password)) {
+            AppLogger.log("BIO", "Password verification failed")
             _uiState.value = _uiState.value.copy(error = "Password incorrect", showBiometricPasswordDialog = false)
             return
         }
-        if (activity == null || !BiometricHelper.isBiometricAvailable(activity)) {
+        AppLogger.log("BIO", "Password verified, activity=$activity, available=${activity?.let { BiometricHelper.isBiometricAvailable(it) }}")
+        if (activity == null) {
+            AppLogger.log("BIO", "Activity is null!")
+            _uiState.value = _uiState.value.copy(error = "Activity context missing", showBiometricPasswordDialog = false)
+            return
+        }
+        if (!BiometricHelper.isBiometricAvailable(activity)) {
+            AppLogger.log("BIO", "Biometric not available on device")
             _uiState.value = _uiState.value.copy(error = "Biometric not available on this device", showBiometricPasswordDialog = false)
             return
         }
         try {
             val salt = cryptoManager.getSalt()
             val keyBytes = cryptoManager.deriveKey(password, salt)
+            AppLogger.log("BIO", "Derived key, length=${keyBytes.size}, enabling biometric...")
             cryptoManager.enableBiometric(keyBytes)
+            AppLogger.log("BIO", "Biometric enabled successfully")
             _uiState.value = _uiState.value.copy(biometricEnabled = true, showBiometricPasswordDialog = false, success = "Biometric login enabled")
         } catch (e: Exception) {
-            _uiState.value = _uiState.value.copy(error = "Enable failed: ${e.message}", showBiometricPasswordDialog = false)
+            AppLogger.log("BIO", "Enable failed", e)
+            _uiState.value = _uiState.value.copy(error = "Enable failed: ${e.javaClass.simpleName}: ${e.message}", showBiometricPasswordDialog = false)
         }
     }
 
@@ -131,17 +144,23 @@ class SettingsViewModel(
 
     // ========== Backup — prepare data and write to URI in one step ==========
     fun saveBackupToUri(uri: Uri) {
+        AppLogger.log("BACKUP", "saveBackupToUri called, uri=$uri")
         if (dao == null) {
+            AppLogger.log("BACKUP", "DAO is null!")
             _uiState.value = _uiState.value.copy(error = "Database not initialized")
             return
         }
         viewModelScope.launch {
             try {
+                AppLogger.log("BACKUP", "Reading VPS list...")
                 val vpsList = dao!!.getAllVpsAsList()
+                AppLogger.log("BACKUP", "VPS count: ${vpsList.size}")
                 if (vpsList.isEmpty()) {
+                    AppLogger.log("BACKUP", "No servers to backup")
                     _uiState.value = _uiState.value.copy(error = "No servers to backup")
                     return@launch
                 }
+                AppLogger.log("BACKUP", "Getting session key, isSet=${SessionKeyHolder.isSet()}")
                 val key = SessionKeyHolder.get()
                 val backupList = vpsList.map { v ->
                     mapOf(
@@ -154,15 +173,20 @@ class SettingsViewModel(
                     )
                 }
                 val json = gson.toJson(backupList)
+                AppLogger.log("BACKUP", "JSON length: ${json.length}")
                 val encrypted = fieldCrypto.encrypt(json, key) ?: json
+                AppLogger.log("BACKUP", "Encrypted length: ${encrypted.length}")
 
                 context.contentResolver.openOutputStream(uri)?.use { output ->
-                    output.write(encrypted.toByteArray(Charsets.UTF_8))
+                    val bytes = encrypted.toByteArray(Charsets.UTF_8)
+                    output.write(bytes)
                     output.flush()
+                    AppLogger.log("BACKUP", "Wrote ${bytes.size} bytes to uri")
                 }
                 _uiState.value = _uiState.value.copy(success = "Backup saved successfully")
             } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(error = "Backup failed: ${e.message}")
+                AppLogger.log("BACKUP", "Backup failed", e)
+                _uiState.value = _uiState.value.copy(error = "Backup failed: ${e.javaClass.simpleName}: ${e.message}")
             }
         }
     }

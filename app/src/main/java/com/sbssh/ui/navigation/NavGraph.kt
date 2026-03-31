@@ -9,6 +9,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.sbssh.ui.auth.MasterPasswordScreen
 import com.sbssh.ui.sftp.SftpScreen
+import com.sbssh.ui.settings.LogScreen
 import com.sbssh.ui.settings.SettingsScreen
 import com.sbssh.ui.terminal.TerminalScreen
 import com.sbssh.ui.vpslist.AddEditVpsScreen
@@ -22,6 +23,7 @@ object Routes {
     const val TERMINAL = "terminal/{vpsId}"
     const val SFTP = "sftp/{vpsId}"
     const val SETTINGS = "settings"
+    const val LOG = "log"
 
     fun editVps(vpsId: Long) = "edit_vps/$vpsId"
     fun terminal(vpsId: Long) = "terminal/$vpsId"
@@ -100,6 +102,13 @@ fun NavGraph(
 
         composable(Routes.SETTINGS) {
             SettingsScreen(
+                onBack = { navController.popBackStack() },
+                onViewLog = { navController.navigate(Routes.LOG) }
+            )
+        }
+
+        composable(Routes.LOG) {
+            LogScreen(
                 onBack = { navController.popBackStack() }
             )
         }
