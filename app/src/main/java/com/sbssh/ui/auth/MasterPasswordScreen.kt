@@ -2,7 +2,6 @@ package com.sbssh.ui.auth
 
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -14,13 +13,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.sbssh.R
 import com.sbssh.data.crypto.CryptoManager
-import com.sbssh.ui.SimpleLoadingText
 import com.sbssh.util.BiometricHelper
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -67,7 +67,7 @@ fun MasterPasswordScreen(
             verticalArrangement = Arrangement.Center
         ) {
             Text(
-                text = if (uiState.isFirstLaunch) "Set Master Password" else "Enter Master Password",
+                text = if (uiState.isFirstLaunch) stringResource(R.string.set_master_password) else stringResource(R.string.enter_master_password),
                 style = MaterialTheme.typography.headlineMedium
             )
 
@@ -75,9 +75,9 @@ fun MasterPasswordScreen(
 
             Text(
                 text = if (uiState.isFirstLaunch)
-                    "Create a strong master password to encrypt your data"
+                    stringResource(R.string.create_password_desc)
                 else
-                    "Enter your master password to unlock",
+                    stringResource(R.string.unlock_password_desc),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -87,7 +87,7 @@ fun MasterPasswordScreen(
             OutlinedTextField(
                 value = password,
                 onValueChange = { password = it },
-                label = { Text("Master Password") },
+                label = { Text(stringResource(R.string.master_password)) },
                 singleLine = true,
                 visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -107,7 +107,7 @@ fun MasterPasswordScreen(
                 OutlinedTextField(
                     value = confirmPassword,
                     onValueChange = { confirmPassword = it },
-                    label = { Text("Confirm Password") },
+                    label = { Text(stringResource(R.string.confirm_password)) },
                     singleLine = true,
                     visualTransformation = if (confirmVisible) VisualTransformation.None else PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -147,9 +147,9 @@ fun MasterPasswordScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 if (uiState.isLoading) {
-                    Text(if (uiState.isFirstLaunch) "Creating..." else "Unlocking...")
+                    Text(if (uiState.isFirstLaunch) stringResource(R.string.creating) else stringResource(R.string.unlocking))
                 } else {
-                    Text(if (uiState.isFirstLaunch) "Create" else "Unlock")
+                    Text(if (uiState.isFirstLaunch) stringResource(R.string.create) else stringResource(R.string.unlock))
                 }
             }
 
@@ -158,7 +158,7 @@ fun MasterPasswordScreen(
                 OutlinedButton(
                     onClick = {
                         val cipher = cryptoManager.getBiometricCipher()
-                        val cryptoObject = BiometricPrompt.CryptoObject(cipher)
+                        val cryptoObject = androidx.biometric.BiometricPrompt.CryptoObject(cipher)
                         BiometricHelper.showBiometricPromptWithCrypto(
                             activity = activity,
                             cryptoObject = cryptoObject,
@@ -184,7 +184,7 @@ fun MasterPasswordScreen(
                 ) {
                     Icon(Icons.Default.Fingerprint, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Unlock with Biometrics")
+                    Text(stringResource(R.string.unlock_biometrics))
                 }
             }
         }

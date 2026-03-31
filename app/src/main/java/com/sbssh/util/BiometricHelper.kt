@@ -85,8 +85,12 @@ object BiometricHelper {
 
     fun isBiometricAvailable(activity: AppCompatActivity): Boolean {
         val biometricManager = androidx.biometric.BiometricManager.from(activity)
+        // Try STRONG first, fall back to WEAK
         return biometricManager.canAuthenticate(
             androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG
+        ) == androidx.biometric.BiometricManager.BIOMETRIC_SUCCESS ||
+        biometricManager.canAuthenticate(
+            androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK
         ) == androidx.biometric.BiometricManager.BIOMETRIC_SUCCESS
     }
 }

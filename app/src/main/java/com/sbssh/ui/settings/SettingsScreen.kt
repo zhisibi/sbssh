@@ -6,7 +6,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -16,269 +15,140 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.sbssh.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(
-    onBack: () -> Unit
-) {
+fun SettingsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val activity = context as? androidx.appcompat.app.AppCompatActivity
-    val viewModel: SettingsViewModel = viewModel(
-        factory = SettingsViewModel.Factory(context, activity)
-    )
+    val viewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.Factory(context, activity))
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     val backupLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/octet-stream")
-    ) { uri ->
-        uri?.let { viewModel.saveBackupToUri(it) }
-    }
+    ) { uri -> uri?.let { viewModel.saveBackupToUri(it) } }
 
     val restoreLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        uri?.let { viewModel.restoreServers(it) }
-    }
+    ) { uri -> uri?.let { viewModel.restoreServers(it) } }
 
-    // Watch for backup data readiness, then launch file chooser
-    LaunchedEffect(uiState.pendingBackupFileName) {
-        val fileName = uiState.pendingBackupFileName
-        if (fileName != null) {
-            backupLauncher.launch(fileName)
-        }
-    }
-
-    // Watch for language change -> restart activity
     LaunchedEffect(uiState.shouldRestart) {
-        if (uiState.shouldRestart) {
-            viewModel.onRestartConsumed()
-            activity?.recreate()
-        }
+        if (uiState.shouldRestart) { viewModel.onRestartConsumed(); activity?.recreate() }
     }
-
     LaunchedEffect(uiState.error) {
-        uiState.error?.let {
-            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
-            viewModel.clearMessages()
-        }
+        uiState.error?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show(); viewModel.clearMessages() }
     }
     LaunchedEffect(uiState.success) {
-        uiState.success?.let {
-            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
-            viewModel.clearMessages()
-        }
+        uiState.success?.let { Toast.makeText(context, it, Toast.LENGTH_SHORT).show(); viewModel.clearMessages() }
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Settings") },
+                title = { Text(stringResource(R.string.settings)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                )
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
             )
         }
     ) { padding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
+            modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // 1. Biometric
-            SettingsCard(
-                icon = Icons.Default.Fingerprint,
-                title = "Biometric Login",
-                subtitle = if (uiState.biometricEnabled) "Enabled" else "Disabled",
+            SettingsCard(Icons.Default.Fingerprint, stringResource(R.string.biometric_login),
+                if (uiState.biometricEnabled) stringResource(R.string.enabled) else stringResource(R.string.disabled),
                 onClick = { viewModel.showBiometricPasswordDialog() }
-            ) {
-                Switch(
-                    checked = uiState.biometricEnabled,
-                    onCheckedChange = { viewModel.showBiometricPasswordDialog() }
-                )
-            }
+            ) { Switch(checked = uiState.biometricEnabled, onCheckedChange = { viewModel.showBiometricPasswordDialog() }) }
 
-            // 2. Language
-            SettingsCard(
-                icon = Icons.Default.Language,
-                title = if (uiState.language == "zh") "语言" else "Language",
-                subtitle = if (uiState.language == "zh") "中文" else "English",
-                onClick = { viewModel.showLanguageDialog() }
-            )
+            SettingsCard(Icons.Default.Language, stringResource(R.string.language),
+                if (uiState.language == "zh") stringResource(R.string.language_zh) else stringResource(R.string.language_en),
+                onClick = { viewModel.showLanguageDialog() })
 
-            // 3. Font size
-            SettingsCard(
-                icon = Icons.Default.FormatSize,
-                title = if (uiState.language == "zh") "字体大小" else "Font Size",
-                subtitle = when (uiState.fontSize) {
-                    "small" -> if (uiState.language == "zh") "小" else "Small"
-                    "medium" -> if (uiState.language == "zh") "中" else "Medium"
-                    "large" -> if (uiState.language == "zh") "大" else "Large"
-                    else -> "Medium"
-                },
-                onClick = { viewModel.showFontSizeDialog() }
-            )
+            SettingsCard(Icons.Default.FormatSize, stringResource(R.string.font_size),
+                when (uiState.fontSize) { "small" -> stringResource(R.string.font_small); "large" -> stringResource(R.string.font_large); else -> stringResource(R.string.font_medium) },
+                onClick = { viewModel.showFontSizeDialog() })
 
-            // 4. Backup
-            SettingsCard(
-                icon = Icons.Default.Backup,
-                title = if (uiState.language == "zh") "服务器备份" else "Server Backup",
-                subtitle = if (uiState.language == "zh") "导出加密备份文件" else "Export encrypted backup",
-                onClick = { viewModel.prepareBackup() }
-            )
+            SettingsCard(Icons.Default.Backup, stringResource(R.string.server_backup),
+                stringResource(R.string.export_encrypted),
+                onClick = { backupLauncher.launch(viewModel.getBackupFileName()) })
 
-            // 5. Restore
-            SettingsCard(
-                icon = Icons.Default.Restore,
-                title = if (uiState.language == "zh") "服务器恢复" else "Server Restore",
-                subtitle = if (uiState.language == "zh") "从备份文件恢复" else "Restore from backup",
-                onClick = { restoreLauncher.launch(arrayOf("*/*")) }
-            )
+            SettingsCard(Icons.Default.Restore, stringResource(R.string.server_restore),
+                stringResource(R.string.restore_from_backup),
+                onClick = { restoreLauncher.launch(arrayOf("*/*")) })
 
-            // 6. Change Password
-            SettingsCard(
-                icon = Icons.Default.Lock,
-                title = if (uiState.language == "zh") "修改密码" else "Change Password",
-                subtitle = if (uiState.language == "zh") "修改主密码并重新加密数据" else "Change master password & re-encrypt",
-                onClick = { viewModel.showChangePasswordDialog() }
-            )
+            SettingsCard(Icons.Default.Lock, stringResource(R.string.change_password),
+                stringResource(R.string.change_password_desc),
+                onClick = { viewModel.showChangePasswordDialog() })
 
-            // 7. Cloud Sync (placeholder)
-            SettingsCard(
-                icon = Icons.Default.CloudSync,
-                title = if (uiState.language == "zh") "云同步" else "Cloud Sync",
-                subtitle = if (uiState.cloudSyncEnabled) {
-                    if (uiState.language == "zh") "已启用" else "Enabled"
-                } else {
-                    if (uiState.language == "zh") "未启用（即将支持）" else "Not enabled (coming soon)"
-                },
-                onClick = { viewModel.showCloudSyncDialog() }
-            )
+            SettingsCard(Icons.Default.CloudSync, stringResource(R.string.cloud_sync),
+                if (uiState.cloudSyncEnabled) stringResource(R.string.cloud_sync_enabled) else stringResource(R.string.cloud_sync_not_enabled),
+                onClick = { viewModel.showCloudSyncDialog() })
 
-            // 8. About
-            SettingsCard(
-                icon = Icons.Default.Info,
-                title = if (uiState.language == "zh") "关于" else "About",
-                subtitle = "SbSSH v1.0",
-                onClick = { viewModel.showAbout() }
-            )
+            SettingsCard(Icons.Default.Info, stringResource(R.string.about), "SbSSH v1.0",
+                onClick = { viewModel.showAbout() })
         }
     }
 
-    // ========== Dialogs ==========
-
-    // Biometric password dialog
+    // Biometric dialog
     if (uiState.showBiometricPasswordDialog) {
         var pwd by remember { mutableStateOf("") }
-        AlertDialog(
-            onDismissRequest = { viewModel.dismissBiometricPasswordDialog() },
-            title = {
-                Text(
-                    if (uiState.biometricEnabled) "Disable Biometric"
-                    else "Enable Biometric"
-                )
-            },
+        AlertDialog(onDismissRequest = { viewModel.dismissBiometricPasswordDialog() },
+            title = { Text(if (uiState.biometricEnabled) stringResource(R.string.disable_biometric) else stringResource(R.string.enable_biometric)) },
             text = {
                 Column {
-                    if (!uiState.biometricEnabled) {
-                        Text(
-                            "Enter your master password to enable fingerprint login",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                    }
-                    OutlinedTextField(
-                        value = pwd,
-                        onValueChange = { pwd = it },
-                        label = { Text("Master Password") },
-                        singleLine = true,
-                        visualTransformation = PasswordVisualTransformation(),
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    if (!uiState.biometricEnabled) { Text(stringResource(R.string.enter_password_enable)); Spacer(Modifier.height(12.dp)) }
+                    OutlinedTextField(value = pwd, onValueChange = { pwd = it }, label = { Text(stringResource(R.string.master_password)) },
+                        singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
                 }
             },
-            confirmButton = {
-                TextButton(
-                    onClick = { viewModel.toggleBiometric(pwd) },
-                    enabled = pwd.isNotEmpty()
-                ) {
-                    Text(if (uiState.biometricEnabled) "Disable" else "Enable")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { viewModel.dismissBiometricPasswordDialog() }) { Text("Cancel") }
-            }
-        )
+            confirmButton = { TextButton(onClick = { viewModel.toggleBiometric(pwd) }, enabled = pwd.isNotEmpty()) {
+                Text(if (uiState.biometricEnabled) stringResource(R.string.disable) else stringResource(R.string.enable)) } },
+            dismissButton = { TextButton(onClick = { viewModel.dismissBiometricPasswordDialog() }) { Text(stringResource(R.string.cancel)) } })
     }
 
     // Language dialog
     if (uiState.showLanguageDialog) {
-        AlertDialog(
-            onDismissRequest = { viewModel.dismissLanguageDialog() },
-            title = { Text("Language / 语言") },
+        AlertDialog(onDismissRequest = { viewModel.dismissLanguageDialog() },
+            title = { Text(stringResource(R.string.language)) },
             text = {
                 Column {
-                    ListItem(
-                        headlineContent = { Text("中文") },
-                        leadingContent = { if (uiState.language == "zh") Icon(Icons.Default.Check, contentDescription = null) },
-                        modifier = Modifier.clickable { viewModel.setLanguage("zh") }
-                    )
-                    ListItem(
-                        headlineContent = { Text("English") },
-                        leadingContent = { if (uiState.language == "en") Icon(Icons.Default.Check, contentDescription = null) },
-                        modifier = Modifier.clickable { viewModel.setLanguage("en") }
-                    )
+                    ListItem(headlineContent = { Text(stringResource(R.string.language_zh)) },
+                        leadingContent = { if (uiState.language == "zh") Icon(Icons.Default.Check, null) },
+                        modifier = Modifier.clickable { viewModel.setLanguage("zh") })
+                    ListItem(headlineContent = { Text(stringResource(R.string.language_en)) },
+                        leadingContent = { if (uiState.language == "en") Icon(Icons.Default.Check, null) },
+                        modifier = Modifier.clickable { viewModel.setLanguage("en") })
                 }
-            },
-            confirmButton = {},
-            dismissButton = { TextButton(onClick = { viewModel.dismissLanguageDialog() }) { Text("Cancel") } }
-        )
+            }, confirmButton = {},
+            dismissButton = { TextButton(onClick = { viewModel.dismissLanguageDialog() }) { Text(stringResource(R.string.cancel)) } })
     }
 
     // Font size dialog
     if (uiState.showFontSizeDialog) {
-        AlertDialog(
-            onDismissRequest = { viewModel.dismissFontSizeDialog() },
-            title = { Text(if (uiState.language == "zh") "字体大小" else "Font Size") },
+        AlertDialog(onDismissRequest = { viewModel.dismissFontSizeDialog() },
+            title = { Text(stringResource(R.string.font_size)) },
             text = {
                 Column {
-                    val sizes = listOf("small" to "Small", "medium" to "Medium", "large" to "Large")
-                    for ((key, _) in sizes) {
-                        ListItem(
-                            headlineContent = {
-                                Text(
-                                    when (key) {
-                                        "small" -> if (uiState.language == "zh") "小" else "Small"
-                                        "medium" -> if (uiState.language == "zh") "中" else "Medium"
-                                        "large" -> if (uiState.language == "zh") "大" else "Large"
-                                        else -> key
-                                    }
-                                )
-                            },
-                            leadingContent = { if (uiState.fontSize == key) Icon(Icons.Default.Check, contentDescription = null) },
-                            modifier = Modifier.clickable { viewModel.setFontSize(key) }
-                        )
+                    for ((key, label) in listOf("small" to R.string.font_small, "medium" to R.string.font_medium, "large" to R.string.font_large)) {
+                        ListItem(headlineContent = { Text(stringResource(label)) },
+                            leadingContent = { if (uiState.fontSize == key) Icon(Icons.Default.Check, null) },
+                            modifier = Modifier.clickable { viewModel.setFontSize(key) })
                     }
                 }
-            },
-            confirmButton = {},
-            dismissButton = { TextButton(onClick = { viewModel.dismissFontSizeDialog() }) { Text("Cancel") } }
-        )
+            }, confirmButton = {},
+            dismissButton = { TextButton(onClick = { viewModel.dismissFontSizeDialog() }) { Text(stringResource(R.string.cancel)) } })
     }
 
     // Cloud sync dialog
@@ -286,172 +156,90 @@ fun SettingsScreen(
         var enabled by remember { mutableStateOf(uiState.cloudSyncEnabled) }
         var url by remember { mutableStateOf(uiState.cloudSyncUrl) }
         var username by remember { mutableStateOf(uiState.cloudSyncUsername) }
-        AlertDialog(
-            onDismissRequest = { viewModel.dismissCloudSyncDialog() },
-            title = { Text(if (uiState.language == "zh") "云同步设置" else "Cloud Sync") },
+        AlertDialog(onDismissRequest = { viewModel.dismissCloudSyncDialog() },
+            title = { Text(stringResource(R.string.cloud_sync_settings)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(if (uiState.language == "zh") "启用云同步" else "Enable Cloud Sync")
-                        Switch(checked = enabled, onCheckedChange = { enabled = it })
+                    Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
+                        Text(stringResource(R.string.enable_cloud_sync)); Switch(checked = enabled, onCheckedChange = { enabled = it })
                     }
                     if (enabled) {
-                        OutlinedTextField(
-                            value = url,
-                            onValueChange = { url = it },
-                            label = { Text("Server URL") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        OutlinedTextField(
-                            value = username,
-                            onValueChange = { username = it },
-                            label = { Text("Username") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Text(
-                            if (uiState.language == "zh") "⚠️ 云同步功能即将上线" else "⚠️ Cloud sync coming soon",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                        OutlinedTextField(value = url, onValueChange = { url = it }, label = { Text(stringResource(R.string.server_url)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(value = username, onValueChange = { username = it }, label = { Text(stringResource(R.string.username)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                        Text(stringResource(R.string.cloud_sync_coming_soon), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                     }
                 }
             },
-            confirmButton = {
-                TextButton(onClick = { viewModel.saveCloudSync(enabled, url, username) }) {
-                    Text("Save")
-                }
-            },
-            dismissButton = { TextButton(onClick = { viewModel.dismissCloudSyncDialog() }) { Text("Cancel") } }
-        )
+            confirmButton = { TextButton(onClick = { viewModel.saveCloudSync(enabled, url, username) }) { Text(stringResource(R.string.save)) } },
+            dismissButton = { TextButton(onClick = { viewModel.dismissCloudSyncDialog() }) { Text(stringResource(R.string.cancel)) } })
     }
 
     // Change password dialog
     if (uiState.showChangePasswordDialog) {
-        var oldPwd by remember { mutableStateOf("") }
-        var newPwd by remember { mutableStateOf("") }
-        var confirmPwd by remember { mutableStateOf("") }
-        var showOld by remember { mutableStateOf(false) }
-        var showNew by remember { mutableStateOf(false) }
-        AlertDialog(
-            onDismissRequest = { viewModel.dismissChangePasswordDialog() },
-            title = { Text(if (uiState.language == "zh") "修改密码" else "Change Password") },
+        var oldPwd by remember { mutableStateOf("") }; var newPwd by remember { mutableStateOf("") }; var confirmPwd by remember { mutableStateOf("") }
+        var showOld by remember { mutableStateOf(false) }; var showNew by remember { mutableStateOf(false) }
+        AlertDialog(onDismissRequest = { viewModel.dismissChangePasswordDialog() },
+            title = { Text(stringResource(R.string.change_password)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = oldPwd,
-                        onValueChange = { oldPwd = it },
-                        label = { Text(if (uiState.language == "zh") "旧密码" else "Old Password") },
-                        singleLine = true,
+                    OutlinedTextField(value = oldPwd, onValueChange = { oldPwd = it }, label = { Text(stringResource(R.string.old_password)) }, singleLine = true,
                         visualTransformation = if (showOld) VisualTransformation.None else PasswordVisualTransformation(),
-                        trailingIcon = {
-                            IconButton(onClick = { showOld = !showOld }) {
-                                Icon(if (showOld) Icons.Default.VisibilityOff else Icons.Default.Visibility, contentDescription = null)
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    OutlinedTextField(
-                        value = newPwd,
-                        onValueChange = { newPwd = it },
-                        label = { Text(if (uiState.language == "zh") "新密码" else "New Password") },
-                        singleLine = true,
+                        trailingIcon = { IconButton(onClick = { showOld = !showOld }) { Icon(if (showOld) Icons.Default.VisibilityOff else Icons.Default.Visibility, null) } },
+                        modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = newPwd, onValueChange = { newPwd = it }, label = { Text(stringResource(R.string.new_password)) }, singleLine = true,
                         visualTransformation = if (showNew) VisualTransformation.None else PasswordVisualTransformation(),
-                        trailingIcon = {
-                            IconButton(onClick = { showNew = !showNew }) {
-                                Icon(if (showNew) Icons.Default.VisibilityOff else Icons.Default.Visibility, contentDescription = null)
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    OutlinedTextField(
-                        value = confirmPwd,
-                        onValueChange = { confirmPwd = it },
-                        label = { Text(if (uiState.language == "zh") "确认新密码" else "Confirm Password") },
-                        singleLine = true,
-                        visualTransformation = PasswordVisualTransformation(),
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                        trailingIcon = { IconButton(onClick = { showNew = !showNew }) { Icon(if (showNew) Icons.Default.VisibilityOff else Icons.Default.Visibility, null) } },
+                        modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = confirmPwd, onValueChange = { confirmPwd = it }, label = { Text(stringResource(R.string.confirm_new_password)) }, singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
                 }
             },
-            confirmButton = {
-                TextButton(
-                    onClick = { viewModel.changePassword(oldPwd, newPwd, confirmPwd) },
-                    enabled = oldPwd.isNotEmpty() && newPwd.isNotEmpty() && confirmPwd.isNotEmpty()
-                ) {
-                    Text(if (uiState.language == "zh") "确认修改" else "Change")
-                }
-            },
-            dismissButton = { TextButton(onClick = { viewModel.dismissChangePasswordDialog() }) { Text("Cancel") } }
-        )
+            confirmButton = { TextButton(onClick = { viewModel.changePassword(oldPwd, newPwd, confirmPwd) }, enabled = oldPwd.isNotEmpty() && newPwd.isNotEmpty() && confirmPwd.isNotEmpty()) {
+                Text(stringResource(R.string.change)) } },
+            dismissButton = { TextButton(onClick = { viewModel.dismissChangePasswordDialog() }) { Text(stringResource(R.string.cancel)) } })
     }
 
     // About dialog
     if (uiState.showAbout) {
-        AlertDialog(
-            onDismissRequest = { viewModel.dismissAbout() },
-            title = { Text("About SbSSH") },
+        AlertDialog(onDismissRequest = { viewModel.dismissAbout() },
+            title = { Text(stringResource(R.string.about_title)) },
             text = {
                 Column {
-                    Text("SbSSH v1.0", fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("A secure Android SSH/SFTP client with local encryption.", style = MaterialTheme.typography.bodyMedium)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("Features:", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodySmall)
-                    Text("• SSH Terminal (password/key auth)", style = MaterialTheme.typography.bodySmall)
-                    Text("• SFTP File Manager", style = MaterialTheme.typography.bodySmall)
-                    Text("• Local AES-GCM encryption", style = MaterialTheme.typography.bodySmall)
-                    Text("• Biometric unlock", style = MaterialTheme.typography.bodySmall)
-                    Text("• Server backup/restore", style = MaterialTheme.typography.bodySmall)
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("SbSSH v1.0", fontWeight = FontWeight.Bold); Spacer(Modifier.height(8.dp))
+                    Text(stringResource(R.string.about_desc)); Spacer(Modifier.height(8.dp))
+                    Text(stringResource(R.string.about_features), fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.about_ssh)); Text(stringResource(R.string.about_sftp))
+                    Text(stringResource(R.string.about_encryption)); Text(stringResource(R.string.about_biometric))
+                    Text(stringResource(R.string.about_backup)); Spacer(Modifier.height(8.dp))
                     Text("© 2026 sbssh", style = MaterialTheme.typography.labelSmall)
                 }
             },
-            confirmButton = { TextButton(onClick = { viewModel.dismissAbout() }) { Text("OK") } }
-        )
+            confirmButton = { TextButton(onClick = { viewModel.dismissAbout() }) { Text(stringResource(R.string.ok)) } })
     }
 }
 
 @Composable
-private fun SettingsCard(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    title: String,
-    subtitle: String,
-    onClick: () -> Unit,
-    trailing: @Composable (() -> Unit)? = null
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-    ) {
+private fun SettingsCard(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, subtitle: String,
+                          onClick: () -> Unit, trailing: @Composable (() -> Unit)? = null) {
+    Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Row(
             modifier = Modifier.padding(16.dp).fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.weight(1f)
             ) {
-                Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
-                Spacer(modifier = Modifier.width(16.dp))
+                Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
+                Spacer(Modifier.width(16.dp))
                 Column {
                     Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                     Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            if (trailing != null) {
-                trailing()
-            } else {
-                Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+            if (trailing != null) trailing() else Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

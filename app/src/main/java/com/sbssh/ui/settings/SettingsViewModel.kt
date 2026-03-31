@@ -36,8 +36,6 @@ data class SettingsUiState(
     val showCloudSyncDialog: Boolean = false,
     val error: String? = null,
     val success: String? = null,
-    val pendingBackupJson: String? = null,
-    val pendingBackupFileName: String? = null,
     val shouldRestart: Boolean = false,
     val cloudSyncEnabled: Boolean = false,
     val cloudSyncUrl: String = "",
@@ -61,7 +59,6 @@ class SettingsViewModel(
     init {
         val biometricAvailable = activity?.let { BiometricHelper.isBiometricAvailable(it) } ?: false
         val settings = settingsManager.settings.value
-
         _uiState.value = _uiState.value.copy(
             biometricEnabled = cryptoManager.isBiometricEnabled(),
             biometricAvailable = biometricAvailable,
@@ -71,6 +68,11 @@ class SettingsViewModel(
             cloudSyncUrl = settings.cloudSyncUrl,
             cloudSyncUsername = settings.cloudSyncUsername
         )
+    }
+
+    fun getBackupFileName(): String {
+        val sdf = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
+        return "sbssh_backup_${sdf.format(Date())}.enc"
     }
 
     // ========== Biometric ==========
@@ -85,92 +87,50 @@ class SettingsViewModel(
     fun toggleBiometric(password: String) {
         val current = _uiState.value.biometricEnabled
         if (current) {
-            // Disable
             cryptoManager.disableBiometric()
-            _uiState.value = _uiState.value.copy(
-                biometricEnabled = false,
-                showBiometricPasswordDialog = false,
-                success = "Biometric login disabled"
-            )
+            _uiState.value = _uiState.value.copy(biometricEnabled = false, showBiometricPasswordDialog = false, success = "Biometric login disabled")
             return
         }
-
-        // Enable: verify password first
         if (!cryptoManager.verifyMasterPassword(password)) {
-            _uiState.value = _uiState.value.copy(
-                error = "Password incorrect",
-                showBiometricPasswordDialog = false
-            )
+            _uiState.value = _uiState.value.copy(error = "Password incorrect", showBiometricPasswordDialog = false)
             return
         }
-
         if (activity == null || !BiometricHelper.isBiometricAvailable(activity)) {
-            _uiState.value = _uiState.value.copy(
-                error = "Biometric not available on this device",
-                showBiometricPasswordDialog = false
-            )
+            _uiState.value = _uiState.value.copy(error = "Biometric not available on this device", showBiometricPasswordDialog = false)
             return
         }
-
         try {
             val salt = cryptoManager.getSalt()
             val keyBytes = cryptoManager.deriveKey(password, salt)
             cryptoManager.enableBiometric(keyBytes)
-            _uiState.value = _uiState.value.copy(
-                biometricEnabled = true,
-                showBiometricPasswordDialog = false,
-                success = "Biometric login enabled"
-            )
+            _uiState.value = _uiState.value.copy(biometricEnabled = true, showBiometricPasswordDialog = false, success = "Biometric login enabled")
         } catch (e: Exception) {
-            _uiState.value = _uiState.value.copy(
-                error = "Enable failed: ${e.message}",
-                showBiometricPasswordDialog = false
-            )
+            _uiState.value = _uiState.value.copy(error = "Enable failed: ${e.message}", showBiometricPasswordDialog = false)
         }
     }
 
     // ========== Language ==========
-    fun showLanguageDialog() {
-        _uiState.value = _uiState.value.copy(showLanguageDialog = true)
-    }
-
-    fun dismissLanguageDialog() {
-        _uiState.value = _uiState.value.copy(showLanguageDialog = false)
-    }
+    fun showLanguageDialog() { _uiState.value = _uiState.value.copy(showLanguageDialog = true) }
+    fun dismissLanguageDialog() { _uiState.value = _uiState.value.copy(showLanguageDialog = false) }
 
     fun setLanguage(lang: String) {
         settingsManager.setLanguage(lang)
-        _uiState.value = _uiState.value.copy(
-            language = lang,
-            showLanguageDialog = false,
-            shouldRestart = true
-        )
+        _uiState.value = _uiState.value.copy(language = lang, showLanguageDialog = false, shouldRestart = true)
     }
 
-    fun onRestartConsumed() {
-        _uiState.value = _uiState.value.copy(shouldRestart = false)
-    }
+    fun onRestartConsumed() { _uiState.value = _uiState.value.copy(shouldRestart = false) }
 
     // ========== Font Size ==========
-    fun showFontSizeDialog() {
-        _uiState.value = _uiState.value.copy(showFontSizeDialog = true)
-    }
-
-    fun dismissFontSizeDialog() {
-        _uiState.value = _uiState.value.copy(showFontSizeDialog = false)
-    }
+    fun showFontSizeDialog() { _uiState.value = _uiState.value.copy(showFontSizeDialog = true) }
+    fun dismissFontSizeDialog() { _uiState.value = _uiState.value.copy(showFontSizeDialog = false) }
 
     fun setFontSize(size: String) {
         settingsManager.setFontSize(size)
-        _uiState.value = _uiState.value.copy(
-            fontSize = size,
-            showFontSizeDialog = false,
-            success = "Font size updated"
-        )
+        _uiState.value = _uiState.value.copy(fontSize = size, showFontSizeDialog = false, success = "Font size updated")
     }
 
-    // ========== Backup ==========
-    fun prepareBackup() {
+    // ========== Backup — prepare data and write to URI in one step ==========
+    fun saveBackupToUri(uri: Uri) {
         if (dao == null) {
             _uiState.value = _uiState.value.copy(error = "Database not initialized")
             return
@@ -183,78 +143,45 @@ class SettingsViewModel(
                     return@launch
                 }
                 val key = SessionKeyHolder.get()
-                val crypto = FieldCryptoManager()
                 val backupList = vpsList.map { v ->
                     mapOf(
-                        "alias" to v.alias,
-                        "host" to v.host,
-                        "port" to v.port,
-                        "username" to v.username,
-                        "authType" to v.authType,
+                        "alias" to v.alias, "host" to v.host, "port" to v.port,
+                        "username" to v.username, "authType" to v.authType,
                         "encryptedPassword" to v.encryptedPassword,
                         "encryptedKeyContent" to v.encryptedKeyContent,
                         "encryptedKeyPassphrase" to v.encryptedKeyPassphrase,
-                        "createdAt" to v.createdAt,
-                        "updatedAt" to v.updatedAt
+                        "createdAt" to v.createdAt, "updatedAt" to v.updatedAt
                     )
                 }
                 val json = gson.toJson(backupList)
-                val encrypted = crypto.encrypt(json, key) ?: json
-                val sdf = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
-                val fileName = "sbssh_backup_${sdf.format(Date())}.enc"
+                val encrypted = fieldCrypto.encrypt(json, key) ?: json
 
-                _uiState.value = _uiState.value.copy(
-                    pendingBackupJson = encrypted,
-                    pendingBackupFileName = fileName
-                )
+                context.contentResolver.openOutputStream(uri)?.use { output ->
+                    output.write(encrypted.toByteArray(Charsets.UTF_8))
+                    output.flush()
+                }
+                _uiState.value = _uiState.value.copy(success = "Backup saved successfully")
             } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(error = "Backup prepare failed: ${e.message}")
+                _uiState.value = _uiState.value.copy(error = "Backup failed: ${e.message}")
             }
         }
     }
 
-    fun saveBackupToUri(uri: Uri) {
-        val data = _uiState.value.pendingBackupJson ?: return
-        try {
-            context.contentResolver.openOutputStream(uri)?.use { output ->
-                output.write(data.toByteArray(Charsets.UTF_8))
-                output.flush()
-            }
-            _uiState.value = _uiState.value.copy(
-                pendingBackupJson = null,
-                pendingBackupFileName = null,
-                success = "Backup saved successfully"
-            )
-        } catch (e: Exception) {
-            _uiState.value = _uiState.value.copy(error = "Save failed: ${e.message}")
-        }
-    }
-
+    // ========== Restore ==========
     fun restoreServers(uri: Uri) {
         viewModelScope.launch {
             try {
-                if (dao == null) {
-                    _uiState.value = _uiState.value.copy(error = "Database not initialized")
-                    return@launch
-                }
+                if (dao == null) { _uiState.value = _uiState.value.copy(error = "Database not initialized"); return@launch }
                 val content = context.contentResolver.openInputStream(uri)?.bufferedReader()?.readText()
                     ?: throw Exception("Failed to read backup file")
-
                 val key = SessionKeyHolder.get()
-                val crypto = FieldCryptoManager()
-                val json = try {
-                    crypto.decrypt(content, key) ?: content
-                } catch (_: Exception) {
-                    content
-                }
-
+                val json = try { fieldCrypto.decrypt(content, key) ?: content } catch (_: Exception) { content }
                 val type = object : TypeToken<List<Map<String, Any>>>() {}.type
                 val backupList: List<Map<String, Any>> = gson.fromJson(json, type)
-
                 val now = System.currentTimeMillis()
                 var count = 0
                 for (item in backupList) {
-                    val vps = VpsEntity(
+                    dao!!.insertVps(VpsEntity(
                         alias = item["alias"] as? String ?: "Unknown",
                         host = item["host"] as? String ?: "0.0.0.0",
                         port = (item["port"] as? Double)?.toInt() ?: 22,
@@ -265,8 +192,7 @@ class SettingsViewModel(
                         encryptedKeyPassphrase = item["encryptedKeyPassphrase"] as? String,
                         createdAt = (item["createdAt"] as? Double)?.toLong() ?: now,
                         updatedAt = (item["updatedAt"] as? Double)?.toLong() ?: now
-                    )
-                    dao!!.insertVps(vps)
+                    ))
                     count++
                 }
                 _uiState.value = _uiState.value.copy(success = "Restored $count server(s)")
@@ -277,69 +203,41 @@ class SettingsViewModel(
     }
 
     // ========== Cloud Sync ==========
-    fun showCloudSyncDialog() {
-        _uiState.value = _uiState.value.copy(showCloudSyncDialog = true)
-    }
-
-    fun dismissCloudSyncDialog() {
-        _uiState.value = _uiState.value.copy(showCloudSyncDialog = false)
-    }
+    fun showCloudSyncDialog() { _uiState.value = _uiState.value.copy(showCloudSyncDialog = true) }
+    fun dismissCloudSyncDialog() { _uiState.value = _uiState.value.copy(showCloudSyncDialog = false) }
 
     fun saveCloudSync(enabled: Boolean, url: String, username: String) {
         settingsManager.setCloudSync(enabled, url, username)
-        _uiState.value = _uiState.value.copy(
-            cloudSyncEnabled = enabled,
-            cloudSyncUrl = url,
-            cloudSyncUsername = username,
-            showCloudSyncDialog = false,
-            success = if (enabled) "Cloud sync configured (coming soon)" else "Cloud sync disabled"
-        )
+        _uiState.value = _uiState.value.copy(cloudSyncEnabled = enabled, cloudSyncUrl = url, cloudSyncUsername = username, showCloudSyncDialog = false, success = if (enabled) "Cloud sync configured (coming soon)" else "Cloud sync disabled")
     }
 
     // ========== Change Password ==========
-    fun showChangePasswordDialog() {
-        _uiState.value = _uiState.value.copy(showChangePasswordDialog = true)
-    }
-
-    fun dismissChangePasswordDialog() {
-        _uiState.value = _uiState.value.copy(showChangePasswordDialog = false)
-    }
+    fun showChangePasswordDialog() { _uiState.value = _uiState.value.copy(showChangePasswordDialog = true) }
+    fun dismissChangePasswordDialog() { _uiState.value = _uiState.value.copy(showChangePasswordDialog = false) }
 
     fun changePassword(oldPassword: String, newPassword: String, confirmPassword: String) {
-        if (newPassword != confirmPassword) {
-            _uiState.value = _uiState.value.copy(error = "Passwords do not match")
-            return
-        }
-        if (newPassword.length < 6) {
-            _uiState.value = _uiState.value.copy(error = "New password must be at least 6 characters")
-            return
-        }
+        if (newPassword != confirmPassword) { _uiState.value = _uiState.value.copy(error = "Passwords do not match"); return }
+        if (newPassword.length < 6) { _uiState.value = _uiState.value.copy(error = "New password must be at least 6 characters"); return }
         viewModelScope.launch {
             try {
                 val newKeyBytes = cryptoManager.changeMasterPassword(oldPassword, newPassword)
-                // Re-encrypt all VPS data with new key
                 if (dao != null) {
                     val vpsList = dao!!.getAllVpsAsList()
                     val oldKey = SessionKeyHolder.get()
                     for (vps in vpsList) {
-                        val plainPassword = fieldCrypto.decrypt(vps.encryptedPassword, oldKey)
-                        val plainKeyContent = fieldCrypto.decrypt(vps.encryptedKeyContent, oldKey)
-                        val plainKeyPassphrase = fieldCrypto.decrypt(vps.encryptedKeyPassphrase, oldKey)
-                        dao!!.updateVps(
-                            vps.copy(
-                                encryptedPassword = fieldCrypto.encrypt(plainPassword, newKeyBytes),
-                                encryptedKeyContent = fieldCrypto.encrypt(plainKeyContent, newKeyBytes),
-                                encryptedKeyPassphrase = fieldCrypto.encrypt(plainKeyPassphrase, newKeyBytes),
-                                updatedAt = System.currentTimeMillis()
-                            )
-                        )
+                        val pw = fieldCrypto.decrypt(vps.encryptedPassword, oldKey)
+                        val kc = fieldCrypto.decrypt(vps.encryptedKeyContent, oldKey)
+                        val kp = fieldCrypto.decrypt(vps.encryptedKeyPassphrase, oldKey)
+                        dao!!.updateVps(vps.copy(
+                            encryptedPassword = fieldCrypto.encrypt(pw, newKeyBytes),
+                            encryptedKeyContent = fieldCrypto.encrypt(kc, newKeyBytes),
+                            encryptedKeyPassphrase = fieldCrypto.encrypt(kp, newKeyBytes),
+                            updatedAt = System.currentTimeMillis()
+                        ))
                     }
                 }
                 SessionKeyHolder.set(newKeyBytes)
-                _uiState.value = _uiState.value.copy(
-                    showChangePasswordDialog = false,
-                    success = "Password changed successfully"
-                )
+                _uiState.value = _uiState.value.copy(showChangePasswordDialog = false, success = "Password changed successfully")
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(error = e.message ?: "Password change failed")
             }
@@ -347,25 +245,12 @@ class SettingsViewModel(
     }
 
     // ========== About ==========
-    fun showAbout() {
-        _uiState.value = _uiState.value.copy(showAbout = true)
-    }
+    fun showAbout() { _uiState.value = _uiState.value.copy(showAbout = true) }
+    fun dismissAbout() { _uiState.value = _uiState.value.copy(showAbout = false) }
+    fun clearMessages() { _uiState.value = _uiState.value.copy(error = null, success = null) }
 
-    fun dismissAbout() {
-        _uiState.value = _uiState.value.copy(showAbout = false)
-    }
-
-    fun clearMessages() {
-        _uiState.value = _uiState.value.copy(error = null, success = null)
-    }
-
-    class Factory(
-        private val context: Context,
-        private val activity: AppCompatActivity? = null
-    ) : ViewModelProvider.Factory {
+    class Factory(private val context: Context, private val activity: AppCompatActivity? = null) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            return SettingsViewModel(context, activity) as T
-        }
+        override fun <T : ViewModel> create(modelClass: Class<T>): T = SettingsViewModel(context, activity) as T
     }
 }

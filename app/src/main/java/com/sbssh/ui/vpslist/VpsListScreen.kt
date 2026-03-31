@@ -9,12 +9,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.sbssh.R
 import com.sbssh.data.db.VpsEntity
-import com.sbssh.ui.SimpleLoadingText
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -32,7 +33,7 @@ fun VpsListScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("My Servers") },
+                title = { Text(stringResource(R.string.my_servers)) },
                 actions = {
                     Box {
                         IconButton(onClick = { showSettingsMenu = true }) {
@@ -43,7 +44,7 @@ fun VpsListScreen(
                             onDismissRequest = { showSettingsMenu = false }
                         ) {
                             DropdownMenuItem(
-                                text = { Text("Settings") },
+                                text = { Text(stringResource(R.string.settings)) },
                                 onClick = { showSettingsMenu = false; onSettings() },
                                 leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) }
                             )
@@ -58,36 +59,32 @@ fun VpsListScreen(
         },
         floatingActionButton = {
             FloatingActionButton(onClick = onAddVps) {
-                Icon(Icons.Default.Add, contentDescription = "Add Server")
+                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.add_server))
             }
         }
     ) { padding ->
         if (uiState.isLoading) {
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
+                modifier = Modifier.fillMaxSize().padding(padding),
                 contentAlignment = Alignment.Center
             ) {
-                SimpleLoadingText("Loading servers...")
+                Text(stringResource(R.string.loading_servers))
             }
         } else if (uiState.vpsList.isEmpty()) {
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
+                modifier = Modifier.fillMaxSize().padding(padding),
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("🖥️", style = MaterialTheme.typography.displaySmall)
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        "No servers yet",
+                        stringResource(R.string.no_servers_yet),
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        "Tap + to add your first server",
+                        stringResource(R.string.tap_add_server),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -95,9 +92,7 @@ fun VpsListScreen(
             }
         } else {
             LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
+                modifier = Modifier.fillMaxSize().padding(padding),
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -117,16 +112,16 @@ fun VpsListScreen(
     uiState.showDeleteDialog?.let { vpsId ->
         AlertDialog(
             onDismissRequest = { viewModel.dismissDelete() },
-            title = { Text("Delete Server") },
-            text = { Text("Are you sure you want to delete this server?") },
+            title = { Text(stringResource(R.string.delete_server)) },
+            text = { Text(stringResource(R.string.delete_confirm)) },
             confirmButton = {
                 TextButton(onClick = { viewModel.deleteVps(vpsId) }) {
-                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { viewModel.dismissDelete() }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.cancel))
                 }
             }
         )
@@ -145,13 +140,9 @@ private fun VpsCard(
 
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
-        ) {
+        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -171,7 +162,7 @@ private fun VpsCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = if (vps.authType == "KEY") "SSH Key Authentication" else "Password Authentication",
+                        text = if (vps.authType == "KEY") stringResource(R.string.ssh_key_auth) else stringResource(R.string.password_auth),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.SemiBold
@@ -181,17 +172,14 @@ private fun VpsCard(
                     IconButton(onClick = { showMenu = true }) {
                         Icon(Icons.Default.MoreVert, contentDescription = "More")
                     }
-                    DropdownMenu(
-                        expanded = showMenu,
-                        onDismissRequest = { showMenu = false }
-                    ) {
+                    DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                         DropdownMenuItem(
-                            text = { Text("Edit") },
+                            text = { Text(stringResource(R.string.edit)) },
                             onClick = { showMenu = false; onEdit() },
                             leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) }
                         )
                         DropdownMenuItem(
-                            text = { Text("Delete") },
+                            text = { Text(stringResource(R.string.delete)) },
                             onClick = { showMenu = false; onDelete() },
                             leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) }
                         )
@@ -201,22 +189,13 @@ private fun VpsCard(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Button(
-                    onClick = onConnectTerminal,
-                    modifier = Modifier.weight(1f)
-                ) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onConnectTerminal, modifier = Modifier.weight(1f)) {
                     Icon(Icons.Default.Terminal, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("SSH")
                 }
-                OutlinedButton(
-                    onClick = onConnectSftp,
-                    modifier = Modifier.weight(1f)
-                ) {
+                OutlinedButton(onClick = onConnectSftp, modifier = Modifier.weight(1f)) {
                     Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("SFTP")

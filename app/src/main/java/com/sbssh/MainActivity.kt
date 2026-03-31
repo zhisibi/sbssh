@@ -1,5 +1,6 @@
 package com.sbssh
 
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.appcompat.app.AppCompatActivity
@@ -15,18 +16,21 @@ import com.sbssh.ui.theme.SbsshTheme
 import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
+
+    override fun attachBaseContext(newBase: Context) {
+        val settingsManager = SettingsManager.getInstance(newBase)
+        val lang = settingsManager.settings.value.language
+        val locale = if (lang == "en") Locale.ENGLISH else Locale.CHINESE
+        val config = newBase.resources.configuration
+        config.setLocale(locale)
+        val context = newBase.createConfigurationContext(config)
+        super.attachBaseContext(context)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         val settingsManager = SettingsManager.getInstance(this)
-
-        // Apply language on activity creation
-        val lang = settingsManager.settings.value.language
-        val locale = if (lang == "en") Locale.ENGLISH else Locale.CHINESE
-        Locale.setDefault(locale)
-        val config = resources.configuration
-        config.setLocale(locale)
-        resources.updateConfiguration(config, resources.displayMetrics)
 
         setContent {
             val settings by settingsManager.settings.collectAsState()

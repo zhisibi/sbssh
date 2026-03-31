@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SbSSH</string>
+
+    <!-- Master Password -->
+    <string name="set_master_password">设置主密码</string>
+    <string name="enter_master_password">输入主密码</string>
+    <string name="create_password_desc">创建一个强密码来加密你的数据</string>
+    <string name="unlock_password_desc">输入主密码解锁</string>
+    <string name="master_password">主密码</string>
+    <string name="confirm_password">确认密码</string>
+    <string name="create">创建</string>
+    <string name="unlock">解锁</string>
+    <string name="creating">创建中...</string>
+    <string name="unlocking">解锁中...</string>
+    <string name="unlock_biometrics">指纹解锁</string>
+    <string name="password_min_chars">密码至少6个字符</string>
+    <string name="passwords_not_match">两次密码不一致</string>
+    <string name="incorrect_password">密码错误</string>
+
+    <!-- VPS List -->
+    <string name="my_servers">我的服务器</string>
+    <string name="no_servers_yet">还没有服务器</string>
+    <string name="tap_add_server">点击 + 添加你的第一台服务器</string>
+    <string name="ssh_key_auth">密钥认证</string>
+    <string name="password_auth">密码认证</string>
+    <string name="edit">编辑</string>
+    <string name="delete">删除</string>
+    <string name="delete_server">删除服务器</string>
+    <string name="delete_confirm">确定要删除这台服务器吗？</string>
+    <string name="cancel">取消</string>
+    <string name="loading_servers">加载中...</string>
+
+    <!-- Add/Edit VPS -->
+    <string name="add_server">添加服务器</string>
+    <string name="edit_server">编辑服务器</string>
+    <string name="alias_nickname">别名（服务器昵称）</string>
+    <string name="host_ip_domain">主机（IP或域名）</string>
+    <string name="port">端口</string>
+    <string name="username">用户名</string>
+    <string name="auth_type">认证方式</string>
+    <string name="password">密码</string>
+    <string name="ssh_key">SSH密钥</string>
+    <string name="private_key_content">私钥内容</string>
+    <string name="import_key_file">导入密钥文件</string>
+    <string name="key_passphrase_optional">密钥密码（可选）</string>
+    <string name="alias_required">请输入别名</string>
+    <string name="host_required">请输入主机地址</string>
+    <string name="username_required">请输入用户名</string>
+    <string name="save_changes">保存修改</string>
+    <string name="saving">保存中...</string>
+
+    <!-- Terminal -->
+    <string name="no_active_session">无活动会话</string>
+    <string name="connecting">连接中...</string>
+    <string name="connection_failed">连接失败</string>
+
+    <!-- SFTP -->
+    <string name="sftp">SFTP</string>
+    <string name="upload">上传</string>
+    <string name="new_folder">新建文件夹</string>
+    <string name="empty_directory">空目录</string>
+    <string name="loading_files">加载文件中...</string>
+    <string name="folder_name">文件夹名称</string>
+    <string name="create_folder_btn">创建</string>
+    <string name="rename">重命名</string>
+    <string name="new_name">新名称</string>
+    <string name="change_permissions">修改权限</string>
+    <string name="owner">所有者</string>
+    <string name="group">用户组</string>
+    <string name="other">其他</string>
+    <string name="apply">应用</string>
+    <string name="delete_file_q">删除 \"%1$s\"？</string>
+    <string name="download">下载</string>
+    <string name="permissions">权限</string>
+    <string name="failed_read_key">读取密钥文件失败</string>
+    <string name="failed_read_file">读取文件失败</string>
+
+    <!-- Settings -->
+    <string name="settings">设置</string>
+    <string name="biometric_login">指纹登录</string>
+    <string name="enabled">已启用</string>
+    <string name="disabled">未启用</string>
+    <string name="language">语言</string>
+    <string name="font_size">字体大小</string>
+    <string name="server_backup">服务器备份</string>
+    <string name="export_encrypted">导出加密备份文件</string>
+    <string name="server_restore">服务器恢复</string>
+    <string name="restore_from_backup">从备份文件恢复</string>
+    <string name="change_password">修改密码</string>
+    <string name="change_password_desc">修改主密码并重新加密数据</string>
+    <string name="cloud_sync">云同步</string>
+    <string name="cloud_sync_not_enabled">未启用（即将支持）</string>
+    <string name="cloud_sync_enabled">已启用</string>
+    <string name="about">关于</string>
+    <string name="enable_biometric">开启指纹登录</string>
+    <string name="disable_biometric">关闭指纹登录</string>
+    <string name="enter_password_enable">输入主密码以开启指纹登录</string>
+    <string name="enable">开启</string>
+    <string name="disable">关闭</string>
+    <string name="language_zh">中文</string>
+    <string name="language_en">English</string>
+    <string name="font_small">小</string>
+    <string name="font_medium">中</string>
+    <string name="font_large">大</string>
+    <string name="cloud_sync_settings">云同步设置</string>
+    <string name="enable_cloud_sync">启用云同步</string>
+    <string name="server_url">服务器地址</string>
+    <string name="cloud_sync_coming_soon">⚠️ 云同步功能即将上线</string>
+    <string name="save">保存</string>
+    <string name="old_password">旧密码</string>
+    <string name="new_password">新密码</string>
+    <string name="confirm_new_password">确认新密码</string>
+    <string name="change">确认修改</string>
+    <string name="password_changed">密码修改成功</string>
+    <string name="biometric_enabled">指纹登录已开启</string>
+    <string name="biometric_disabled">指纹登录已关闭</string>
+    <string name="biometric_not_available">此设备不支持生物识别</string>
+    <string name="password_incorrect">密码错误</string>
+    <string name="backup_saved">备份保存成功</string>
+    <string name="no_servers_backup">没有服务器可备份</string>
+    <string name="backup_prepare_failed">备份准备失败</string>
+    <string name="save_failed">保存失败</string>
+    <string name="restore_failed">恢复失败</string>
+    <string name="restored_servers">已恢复 %1$d 台服务器</string>
+    <string name="lang_restart">语言已切换（重启生效）</string>
+    <string name="font_size_updated">字体大小已更新</string>
+    <string name="cloud_sync_configured">云同步已配置（即将上线）</string>
+    <string name="cloud_sync_disabled">云同步已关闭</string>
+
+    <!-- About -->
+    <string name="about_title">关于 SbSSH</string>
+    <string name="about_desc">一款安全的 Android SSH/SFTP 客户端，支持本地加密。</string>
+    <string name="about_features">功能：</string>
+    <string name="about_ssh">• SSH 终端（密码/密钥认证）</string>
+    <string name="about_sftp">• SFTP 文件管理器</string>
+    <string name="about_encryption">• 本地 AES-GCM 加密</string>
+    <string name="about_biometric">• 指纹解锁</string>
+    <string name="about_backup">• 服务器备份/恢复</string>
+    <string name="ok">确定</string>
+</resources>
