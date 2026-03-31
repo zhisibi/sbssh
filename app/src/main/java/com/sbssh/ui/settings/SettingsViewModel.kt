@@ -93,12 +93,7 @@ class SettingsViewModel(
             _uiState.value = _uiState.value.copy(biometricEnabled = false, showBiometricPasswordDialog = false, success = "Biometric login disabled")
             return
         }
-        if (!cryptoManager.verifyMasterPassword(password)) {
-            AppLogger.log("BIO", "Password verification failed")
-            _uiState.value = _uiState.value.copy(error = "Password incorrect", showBiometricPasswordDialog = false)
-            return
-        }
-        AppLogger.log("BIO", "Password verified, activity=$activity, available=${activity?.let { BiometricHelper.isBiometricAvailable(it) }}")
+        // User is already logged in — use session key directly, no need to re-verify password
         if (activity == null) {
             AppLogger.log("BIO", "Activity is null!")
             _uiState.value = _uiState.value.copy(error = "Activity context missing", showBiometricPasswordDialog = false)
@@ -110,9 +105,8 @@ class SettingsViewModel(
             return
         }
         try {
-            val salt = cryptoManager.getSalt()
-            val keyBytes = cryptoManager.deriveKey(password, salt)
-            AppLogger.log("BIO", "Derived key, length=${keyBytes.size}, enabling biometric...")
+            val keyBytes = SessionKeyHolder.get()
+            AppLogger.log("BIO", "Got session key, length=${keyBytes.size}, enabling biometric...")
             cryptoManager.enableBiometric(keyBytes)
             AppLogger.log("BIO", "Biometric enabled successfully")
             _uiState.value = _uiState.value.copy(biometricEnabled = true, showBiometricPasswordDialog = false, success = "Biometric login enabled")

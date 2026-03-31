@@ -69,8 +69,8 @@ fun SettingsScreen(onBack: () -> Unit, onViewLog: () -> Unit = {}) {
         ) {
             SettingsCard(Icons.Default.Fingerprint, stringResource(R.string.biometric_login),
                 if (uiState.biometricEnabled) stringResource(R.string.enabled) else stringResource(R.string.disabled),
-                onClick = { viewModel.showBiometricPasswordDialog() }
-            ) { Switch(checked = uiState.biometricEnabled, onCheckedChange = { viewModel.showBiometricPasswordDialog() }) }
+                onClick = { viewModel.toggleBiometric("") }
+            ) { Switch(checked = uiState.biometricEnabled, onCheckedChange = { viewModel.toggleBiometric("") }) }
 
             SettingsCard(Icons.Default.Language, stringResource(R.string.language),
                 if (uiState.language == "zh") stringResource(R.string.language_zh) else stringResource(R.string.language_en),
